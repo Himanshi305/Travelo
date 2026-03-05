@@ -8,31 +8,38 @@ const Navbar = () => {
   const { user, logout } = useContext(AuthContext);
 
   return (
-    <nav>
-      <ul>
-        <li>
-          <Link href="/">Home</Link>
-        </li>
-        {user ? (
-          <>
-            <li>
-              <Link href="/dashboard">Dashboard</Link>
-            </li>
-            <li>
-              <button onClick={logout}>Logout</button>
-            </li>
-          </>
-        ) : (
-          <>
-            <li>
-              <Link href="/login">Login</Link>
-            </li>
-            <li>
-              <Link href="/register">Register</Link>
-            </li>
-          </>
-        )}
-      </ul>
+    <nav className="fixed top-0 left-0 w-full z-20 bg-transparent text-white">
+      <div className="container mx-auto flex justify-between items-center p-4">
+        <div>
+          <Link href="/" className="text-2xl font-bold hover:text-primary">
+            TravelCo
+          </Link>
+        </div>
+        <ul className="flex items-center">
+          <li className="ml-4">
+            <Link href="/" className="hover:text-primary">Home</Link>
+          </li>
+          {user ? (
+            <>
+              <li className="ml-4">
+                <Link href="/dashboard" className="hover:text-primary">Dashboard</Link>
+              </li>
+              <li className="ml-4">
+                <button onClick={logout} className="hover:text-primary">Logout</button>
+              </li>
+            </>
+          ) : (
+            <>
+              <li className="ml-4">
+                <Link href="/login" className="hover:text-primary">Login</Link>
+              </li>
+              <li className="ml-4">
+                <Link href="/register" className="hover:text-primary">Register</Link>
+              </li>
+            </>
+          )}
+        </ul>
+      </div>
     </nav>
   );
 };
