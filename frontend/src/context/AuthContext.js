@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useState, useEffect } from 'react';
-import axios from '../services/axios';
+import supabase from '../lib/supabase';
 import { useRouter } from 'next/navigation';
 
 const AuthContext = createContext();
@@ -12,24 +12,35 @@ export const AuthProvider = ({ children }) => {
   const router = useRouter();
 
   useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const res = await axios.get('/api/auth/user');
-        setUser(res.data);
-      } catch (err) {
-        setUser(null);
-      } finally {
-        setLoading(false);
-      }
+    const getSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setUser(session?.user ?? null);
+      setLoading(false);
     };
-    loadUser();
-  }, []);
+
+    getSession();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setUser(session?.user ?? null);
+        if (event === 'SIGNED_IN') {
+          router.push('/dashboard');
+        }
+        if (event === 'SIGNED_OUT') {
+          router.push('/login');
+        }
+      }
+    );
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, [router]);
 
   const login = async (email, password) => {
     try {
-      const res = await axios.post('/api/auth/login', { email, password });
-      setUser(res.data.user);
-      router.push('/dashboard');
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
     } catch (err) {
       console.error(err);
     }
@@ -37,7 +48,17 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (email, password, role) => {
     try {
-      await axios.post('/api/auth/register', { email, password, role });
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            role,
+          },
+        },
+      });
+      if (error) throw error;
+      // You might want to redirect to a "check your email" page
       router.push('/login');
     } catch (err) {
       console.error(err);
@@ -46,7 +67,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      await axios.post('/api/auth/logout');
+      await supabase.auth.signOut();
       setUser(null);
       router.push('/login');
     } catch (err) {

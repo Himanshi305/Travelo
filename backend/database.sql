@@ -5,3 +5,14 @@ CREATE TABLE users (
   role ENUM('user', 'admin', 'vendor') NOT NULL DEFAULT 'user',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE Destination_Master (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  image_url VARCHAR(255),
+  rating DECIMAL(3, 2) DEFAULT 0.00,
+  lat DECIMAL(10, 8),
+  lng DECIMAL(11, 8),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

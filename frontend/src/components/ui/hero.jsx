@@ -103,9 +103,9 @@ export default function Hero() {
           <div className="w-full space-y-4 sm:w-1/2">
             <h1 className="font-medium text-4xl text-white leading-[1.05] tracking-tight sm:text-5xl md:text-6xl lg:text-7xl">
               We <span className="text-primary">think</span>, you{" "}
-              <span className="text-primary">grow</span>
+              <span className="text-primary">travel</span>
               <br />
-              <span className="text-white">— that's the deal</span>
+              <span className="text-white">— that's the vibe</span>
             </h1>
             <Button className="rounded-none py-0 pr-0 font-normal text-black text-lg">
               Get Template
@@ -116,9 +116,8 @@ export default function Hero() {
           </div>
           <div className="w-full sm:w-1/2">
             <p className="text-base text-primary italic sm:text-right md:text-2xl">
-              We take your big ideas and turn them into clear, winning
-              strategies. From setting up your company to scaling it worldwide,
-              we're here every step of the way.
+              Our platform is designed to provide a secure and user-friendly digital environment where users can easily access services, manage information, and interact with the system efficiently. Built with modern web technologies, the project ensures reliability, scalability, and smooth performance across different devices.
+
             </p>
           </div>
         </div>

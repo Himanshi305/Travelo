@@ -19,6 +19,12 @@ const Navbar = () => {
           <li className="ml-4">
             <Link href="/" className="hover:text-primary">Home</Link>
           </li>
+          <li className="ml-4">
+            <Link href="/destinations" className="hover:text-primary">Destinations</Link>
+          </li>
+          <li className="ml-4">
+            <Link href="/hotels" className="hover:text-primary">Hotels</Link>
+          </li>
           {user ? (
             <>
               <li className="ml-4">
