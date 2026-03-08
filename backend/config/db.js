@@ -2,14 +2,12 @@ import mysql from "mysql2";
 
 const connectDB = () => {
   const pool = mysql.createPool({
-    host: "localhost",
-    user: "root",
-    password: "your_mysql_password",  // change this
-    database: "travel_companion",
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
-  });
+  host: process.env.DB_HOST || "localhost",
+  user: process.env.DB_USER || "root",
+  password: process.env.DB_PASSWORD || "",
+  database: process.env.DB_NAME || "travel_booking",
+  port: process.env.DB_PORT || 3306,
+});
 
   pool.getConnection((err, connection) => {
     if (err) {
