@@ -1,20 +1,38 @@
-import connectDB from '../config/db.js';
-
-const db = connectDB();
+import supabase from "../config/supabase.js";
 
 const User = {
-  create: (email, password, role, callback) => {
-    const query = 'INSERT INTO users (email, password, role) VALUES (?, ?, ?)';
-    db.query(query, [email, password, role], callback);
+
+  create: async (email, password, role) => {
+    const { data, error } = await supabase
+      .from("users")
+      .insert([{ email, password, role }]);
+
+    if (error) throw error;
+    return data;
   },
-  findByEmail: (email, callback) => {
-    const query = 'SELECT * FROM users WHERE email = ?';
-    db.query(query, [email], callback);
+
+  findByEmail: async (email) => {
+    const { data, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("email", email)
+      .single();
+
+    if (error) throw error;
+    return data;
   },
-  findById: (id, callback) => {
-    const query = 'SELECT * FROM users WHERE id = ?';
-    db.query(query, [id], callback);
+
+  findById: async (id) => {
+    const { data, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (error) throw error;
+    return data;
   }
+
 };
 
 export default User;

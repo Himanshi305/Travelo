@@ -1,96 +1,110 @@
-import pool from '../config/db.js';
+import supabase from "../config/supabase.js";
 
 // GET all destinations
 export const getDestinations = async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM Destination_Master');
-    res.json(rows);
+    const { data, error } = await supabase
+      .from("Destination_Master")
+      .select("*");
+
+    if (error) throw error;
+
+    res.json(data);
   } catch (err) {
     console.error(err);
-    res.status(500).send('Server error');
+    res.status(500).send("Server error");
   }
 };
 
 // GET single destination
 export const getDestination = async (req, res) => {
   try {
-    const [rows] = await pool.query(
-      'SELECT * FROM Destination_Master WHERE id = ?',
-      [req.params.id]
-    );
+    const { data, error } = await supabase
+      .from("Destination_Master")
+      .select("*")
+      .eq("destination_ID", req.params.id)
+      .single();
 
-    if (rows.length === 0) {
-      return res.status(404).json({ msg: 'Destination not found' });
+    if (error) {
+      return res.status(404).json({ msg: "Destination not found" });
     }
 
-    res.json(rows[0]);
+    res.json(data);
   } catch (err) {
     console.error(err);
-    res.status(500).send('Server error');
+    res.status(500).send("Server error");
   }
 };
 
 // CREATE destination
 export const createDestination = async (req, res) => {
-  const { name, description, image_url, rating, lat, lng } = req.body;
+  const { destination_ID, destination_name, location, rating, image_url } = req.body;
 
   try {
-    const [result] = await pool.query(
-      'INSERT INTO Destination_Master (name, description, image_url, rating, lat, lng) VALUES (?, ?, ?, ?, ?, ?)',
-      [name, description, image_url, rating, lat, lng]
-    );
+    const { data, error } = await supabase
+      .from("Destination_Master")
+      .insert([
+        {
+          destination_ID,
+          destination_name,
+          location,
+          rating,
+          image_url
+        }
+      ])
+      .select();
 
-    res.status(201).json({
-      id: result.insertId,
-      name,
-      description,
-      image_url,
-      rating,
-      lat,
-      lng
-    });
+    if (error) throw error;
+
+    res.status(201).json(data[0]);
   } catch (err) {
     console.error(err);
-    res.status(500).send('Server error');
+    res.status(500).send("Server error");
   }
 };
 
 // UPDATE destination
 export const updateDestination = async (req, res) => {
-  const { name, description, image_url, rating, lat, lng } = req.body;
+  const { destination_name, location, rating, image_url } = req.body;
 
   try {
-    const [result] = await pool.query(
-      'UPDATE Destination_Master SET name=?, description=?, image_url=?, rating=?, lat=?, lng=? WHERE id=?',
-      [name, description, image_url, rating, lat, lng, req.params.id]
-    );
+    const { data, error } = await supabase
+      .from("Destination_Master")
+      .update({
+        destination_name,
+        location,
+        rating,
+        image_url
+      })
+      .eq("destination_ID", req.params.id)
+      .select();
 
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ msg: 'Destination not found' });
+    if (error || data.length === 0) {
+      return res.status(404).json({ msg: "Destination not found" });
     }
 
-    res.json({ msg: 'Destination updated' });
+    res.json({ msg: "Destination updated" });
   } catch (err) {
     console.error(err);
-    res.status(500).send('Server error');
+    res.status(500).send("Server error");
   }
 };
 
 // DELETE destination
 export const deleteDestination = async (req, res) => {
   try {
-    const [result] = await pool.query(
-      'DELETE FROM Destination_Master WHERE id = ?',
-      [req.params.id]
-    );
+    const { error } = await supabase
+      .from("Destination_Master")
+      .delete()
+      .eq("destination_ID", req.params.id);
 
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ msg: 'Destination not found' });
+    if (error) {
+      return res.status(404).json({ msg: "Destination not found" });
     }
 
-    res.json({ msg: 'Destination deleted' });
+    res.json({ msg: "Destination deleted" });
   } catch (err) {
     console.error(err);
-    res.status(500).send('Server error');
+    res.status(500).send("Server error");
   }
 };

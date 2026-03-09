@@ -16,19 +16,19 @@ const Navbar = () => {
           </Link>
         </div>
         <ul className="flex items-center">
-          <li className="ml-4">
-            <Link href="/" className="hover:text-primary">Home</Link>
-          </li>
-          <li className="ml-4">
-            <Link href="/destinations" className="hover:text-primary">Destinations</Link>
-          </li>
-          <li className="ml-4">
-            <Link href="/hotels" className="hover:text-primary">Hotels</Link>
-          </li>
           {user ? (
             <>
               <li className="ml-4">
                 <Link href="/dashboard" className="hover:text-primary">Dashboard</Link>
+              </li>
+              <li className="ml-4">
+                <Link href="/destinations" className="hover:text-primary">Destinations</Link>
+              </li>
+              <li className="ml-4">
+                <Link href="/hotels" className="hover:text-primary">Hotels</Link>
+              </li>
+              <li className="ml-4">
+                <Link href="/activities" className="hover:text-primary">Activities</Link>
               </li>
               <li className="ml-4">
                 <button onClick={logout} className="hover:text-primary">Logout</button>
@@ -36,6 +36,9 @@ const Navbar = () => {
             </>
           ) : (
             <>
+              <li className="ml-4">
+                <Link href="/" className="hover:text-primary">Home</Link>
+              </li>
               <li className="ml-4">
                 <Link href="/login" className="hover:text-primary">Login</Link>
               </li>

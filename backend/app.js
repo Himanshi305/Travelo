@@ -5,7 +5,6 @@ import cookieParser from 'cookie-parser';
 import authRoutes from './routes/auth.js';
 import usersRoutes from './routes/users.js';
 import destinationRoutes from './routes/destinations.js';
-import connectDB from './config/db.js';
 
 console.log("app.js is running");
 
