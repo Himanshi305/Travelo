@@ -38,13 +38,22 @@ export const AuthProvider = ({ children }) => {
   }, [router]);
 
   const login = async (email, password) => {
-    try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) throw error;
+
+    // Save token for backend requests
+    const token = data.session.access_token;
+    localStorage.setItem("token", token);
+
+  } catch (err) {
+    console.error(err);
+  }
+};
 
   const register = async (email, password, role) => {
     try {
@@ -66,14 +75,15 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
-    try {
-      await supabase.auth.signOut();
-      setUser(null);
-      router.push('/login');
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  try {
+    await supabase.auth.signOut();
+    localStorage.removeItem("token");
+    setUser(null);
+    router.push("/login");
+  } catch (err) {
+    console.error(err);
+  }
+};
 
   return (
     <AuthContext.Provider value={{ user, loading, login, register, logout }}>

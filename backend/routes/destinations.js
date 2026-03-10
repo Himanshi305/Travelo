@@ -1,20 +1,28 @@
-  import express from 'express';
-  import {
-    getDestinations,
-    getDestination,
-    createDestination,
-    updateDestination,
-    deleteDestination,
-  } from '../controllers/destinationController.js';
-  import { auth, isAdmin } from '../middleware/auth.js';
+import express from 'express';
+import {
+  getDestinations,
+  getDestination,
+  createDestination,
+  updateDestination,
+  deleteDestination,
+} from '../controllers/destinationController.js';
+import { auth, isAdmin } from '../middleware/auth.js';
 
-  const router = express.Router();
+const router = express.Router();
 
-  router.route('/').get(getDestinations).post(auth, isAdmin, createDestination);
-  router
-    .route('/:id')
-    .get(getDestination)
-    .put(auth, isAdmin, updateDestination)
-    .delete(auth, isAdmin, deleteDestination);
+// Get all destinations
+router.get('/', getDestinations);
 
-  export default router;
+// Create destination (Authenticated users)
+router.post('/', auth, createDestination);
+
+// Get single destination
+router.get('/:id', getDestination);
+
+// Update destination (Admin only)
+router.put('/:id', auth, isAdmin, updateDestination);
+
+// Delete destination (Admin only)
+router.delete('/:id', auth, isAdmin, deleteDestination);
+
+export default router;

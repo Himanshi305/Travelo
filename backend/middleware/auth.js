@@ -1,18 +1,26 @@
-import jwt from 'jsonwebtoken';
+import jwt from "jsonwebtoken";
 
 export const auth = (req, res, next) => {
-  const token = req.cookies.token;
+  console.log("Headers:", req.headers);
 
-  if (!token) {
-    return res.status(401).send('Access denied');
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    console.log("No Authorization header");
+    return res.status(401).send("Access denied. No token provided.");
   }
+
+  const token = authHeader.split(" ")[1];
+  console.log("Token received:", token);
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log("Decoded token:", decoded);
     req.user = decoded;
     next();
   } catch (err) {
-    res.status(400).send('Invalid token');
+    console.log("JWT error:", err.message);
+    return res.status(401).send("Invalid token");
   }
 };
 
