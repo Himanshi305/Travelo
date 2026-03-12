@@ -1,4 +1,5 @@
 import axios from "axios";
+import supabase from "../lib/supabase";
 
 const api = axios.create({
   baseURL: "http://localhost:5000", // Update with your backend URL
@@ -7,11 +8,13 @@ const api = axios.create({
   },
 });
 
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+api.interceptors.request.use(async (config) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  
+  if (session) {
+    config.headers.Authorization = `Bearer ${session.access_token}`;
   }
+  
   return config;
 });
 

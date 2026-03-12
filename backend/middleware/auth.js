@@ -1,39 +1,49 @@
-import jwt from "jsonwebtoken";
+import supabase from '../config/supabase.js';
 
-export const auth = (req, res, next) => {
-  console.log("Headers:", req.headers);
-
+export const auth = async (req, res, next) => {
   const authHeader = req.headers.authorization;
 
-  if (!authHeader) {
-    console.log("No Authorization header");
-    return res.status(401).send("Access denied. No token provided.");
+  console.log("Authorization header:", authHeader);
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ msg: 'No token, authorization denied' });
   }
 
-  const token = authHeader.split(" ")[1];
-  console.log("Token received:", token);
+  const token = authHeader.split(' ')[1];
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log("Decoded token:", decoded);
-    req.user = decoded;
+    const { data, error } = await supabase.auth.getUser(token);
+
+    // 🔍 log Supabase response
+    console.log("Supabase user:", data);
+    console.log("Supabase error:", error);
+
+    if (error || !data?.user) {
+      return res.status(401).json({ msg: 'Invalid token' });
+    }
+
+    req.user = data.user;
+
     next();
+
   } catch (err) {
-    console.log("JWT error:", err.message);
-    return res.status(401).send("Invalid token");
+    console.error("Auth middleware crash:", err);
+    return res.status(401).json({ msg: 'Token verification failed' });
   }
 };
 
 export const isAdmin = (req, res, next) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).send('Forbidden');
+  if (req.user && req.user.role === 'admin') {
+    next();
+  } else {
+    res.status(403).json({ msg: 'Admin access required' });
   }
-  next();
 };
 
 export const isVendor = (req, res, next) => {
-    if (req.user.role !== 'vendor') {
-      return res.status(403).send('Forbidden');
-    }
+  if (req.user && req.user.role === 'vendor') {
     next();
-  };
+  } else {
+    res.status(403).json({ msg: 'Vendor access required' });
+  }
+};

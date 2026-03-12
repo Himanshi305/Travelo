@@ -1,54 +1,73 @@
-'use client'
+'use client';
 import React, { useState, useEffect } from 'react';
-import HotelCard from '../../components/HotelCard';
+import { GoogleMap, LoadScript, Marker } from '@react-google-maps/api';
 import axios from '../../services/axios';
+import HotelCard from '../../components/HotelCard';
+
+const containerStyle = {
+  width: '100%',
+  height: '400px',
+};
 
 const HotelsPage = () => {
   const [hotels, setHotels] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [destination, setDestination] = useState(null);
+  const [mapCenter, setMapCenter] = useState({ lat: 28.6139, lng: 77.209 }); // Default center
 
   useEffect(() => {
-    const fetchHotels = async () => {
-      try {
-        const res = await axios.get('/api/hotels');
-        setHotels(res.data);
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    fetchHotels();
+    const storedDestination = localStorage.getItem('destination');
+    if (storedDestination) {
+      const parsedDestination = JSON.parse(storedDestination);
+      setDestination(parsedDestination);
+      const center = { lat: parsedDestination.lat, lng: parsedDestination.lng };
+      setMapCenter(center);
+      fetchNearbyHotels(center.lat, center.lng);
+    }
   }, []);
 
-  const filteredHotels = hotels.filter((hotel) =>
-    hotel.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const fetchNearbyHotels = async (lat, lng) => {
+    try {
+      const { data } = await axios.get(`/api/hotels/nearby?lat=${lat}&lng=${lng}`);
+      setHotels(data);
+    } catch (error) {
+      console.error('Failed to fetch nearby hotels:', error);
+    }
+  };
 
   return (
     <div className="bg-gray-900 text-white min-h-screen">
-      <div
-        className="absolute inset-0 bg-center bg-cover"
-        style={{
-          backgroundImage:
-            "url(https://images.unsplash.com/photo-1566073771259-6a8506099945)",
-        }}
-      >
-        <div className="absolute inset-0 bg-black/60" />
-      </div>
-      <div className="relative container mx-auto px-4 py-8">
-        <h1 className="text-5xl font-bold mb-8 text-center">Hotels</h1>
+      <div className="container mx-auto px-4 py-8">
+        <h1 className="text-5xl font-bold mb-2 text-center">
+          Hotels Near {destination ? destination.name : 'Your Destination'}
+        </h1>
+        <p className="text-center text-gray-400 mb-8">
+          Showing hotels within a 5km radius
+        </p>
+
         <div className="mb-8">
-          <input
-            type="text"
-            placeholder="Search hotels..."
-            className="w-full px-4 py-2 border rounded-md bg-gray-800 text-white border-gray-700 focus:ring-blue-500 focus:border-blue-500"
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+          <LoadScript googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}>
+            <GoogleMap
+              mapContainerStyle={containerStyle}
+              center={mapCenter}
+              zoom={13}
+            >
+              {hotels.map((hotel) => (
+                <Marker
+                  key={hotel.hotel_id}
+                  position={{ lat: hotel.lat, lng: hotel.lng }}
+                  title={hotel.hotel_name}
+                />
+              ))}
+            </GoogleMap>
+          </LoadScript>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {filteredHotels.map((hotel) => (
-            <HotelCard key={hotel.id} hotel={hotel} />
-          ))}
+          {hotels.length > 0 ? (
+            hotels.map((hotel) => <HotelCard key={hotel.hotel_id} hotel={hotel} />)
+          ) : (
+            <p>No hotels found nearby.</p>
+          )}
         </div>
       </div>
     </div>

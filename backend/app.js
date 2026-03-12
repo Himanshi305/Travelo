@@ -22,9 +22,12 @@ app.use(morgan('dev'));
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
+import hotelsRoutes from './routes/hotels.js';
+
 app.use('/api/auth', authRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/destinations', destinationRoutes);
+app.use('/api/hotels', hotelsRoutes);
 
 app.get('/', (req, res) => {
     res.send('Hello World!');

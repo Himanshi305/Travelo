@@ -1,84 +1,59 @@
-'use client'
+'use client';
 import React, { useState, useEffect } from 'react';
-import DestinationCard from '../../components/DestinationCard';
-import MapPicker from '../../components/MapPicker';
 import axios from '../../services/axios';
+import RouteMap from '../../components/RouteMap';
 
 const DestinationsPage = () => {
   const [destinations, setDestinations] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
   const [newDestination, setNewDestination] = useState({
-    name: '',
-    description: '',
-    origin_lat: '',
-    origin_lng: '',
-    destination_lat: '',
-    destination_lng: '',
+    destination_name: '',
+    location: '',
+    rating: '',
+    image_url: '',
   });
 
   useEffect(() => {
-    const fetchDestinations = async () => {
-      try {
-        const res = await axios.get('/api/destinations');
-        setDestinations(res.data);
-      } catch (err) {
-        console.error(err);
-      }
-    };
     fetchDestinations();
   }, []);
 
-  const handleLocationChange = (locations) => {
-    setNewDestination({
-      ...newDestination,
-      origin_lat: locations.origin?.lat || '',
-      origin_lng: locations.origin?.lng || '',
-      destination_lat: locations.destination?.lat || '',
-      destination_lng: locations.destination?.lng || '',
-    });
+  const fetchDestinations = async () => {
+    try {
+      const { data } = await axios.get('/api/destinations');
+      setDestinations(data);
+    } catch (error) {
+      console.error('Failed to fetch destinations:', error);
+    }
   };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setNewDestination({ ...newDestination, [name]: value });
+    setNewDestination((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handlePlaceSelect = (location) => {
+    setNewDestination((prev) => ({ ...prev, location }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        alert('You must be logged in to add a destination.');
-        return;
-      }
-      const res = await axios.post('/api/destinations', {
-        name: newDestination.name,
-        description: newDestination.description,
-        latitude: newDestination.destination_lat,
-        longitude: newDestination.destination_lng,
-      }
-      , {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+      const { data } = await axios.post('/api/destinations', {
+        destination_name: newDestination.destination_name,
+        location: newDestination.location,
+        rating: newDestination.rating,
+        image_url: newDestination.image_url,
       });
-      setDestinations([...destinations, res.data]);
+      setDestinations((prev) => [...prev, data]);
       setNewDestination({
-        name: '',
-        description: '',
-        origin_lat: '',
-        origin_lng: '',
-        destination_lat: '',
-        destination_lng: '',
+        destination_name: '',
+        location: '',
+        rating: '',
+        image_url: '',
       });
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error('Failed to create destination:', error);
     }
   };
-
-  const filteredDestinations = destinations.filter((destination) =>
-    destination.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   return (
     <div className="bg-gray-900 text-white min-h-screen">
@@ -93,62 +68,60 @@ const DestinationsPage = () => {
       </div>
       <div className="relative container mx-auto px-4 py-8">
         <h1 className="text-5xl font-bold mb-8 text-center">Destinations</h1>
-        <div className="mb-8">
-          <input
-            type="text"
-            placeholder="Search destinations..."
-            className="w-full px-4 py-2 border rounded-md bg-gray-800 text-white border-gray-700 focus:ring-blue-500 focus:border-blue-500"
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
 
+        {/* Form to add new destination */}
         <div className="mb-8 bg-gray-800/50 backdrop-blur-sm p-6 rounded-lg">
           <h2 className="text-3xl font-bold mb-4">Add a New Destination</h2>
           <form onSubmit={handleSubmit}>
-            <div className="mb-4">
-              <label htmlFor="name" className="block text-sm font-medium text-gray-300">
-                Name
-              </label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <input
                 type="text"
-                id="name"
-                name="name"
-                value={newDestination.name}
+                name="destination_name"
+                placeholder="Destination Name"
+                value={newDestination.destination_name}
                 onChange={handleInputChange}
-                className="mt-1 block w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md"
+              />
+              <input
+                type="text"
+                name="rating"
+                placeholder="Rating (1-5)"
+                value={newDestination.rating}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md"
+              />
+              <input
+                type="text"
+                name="image_url"
+                placeholder="Image URL"
+                value={newDestination.image_url}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md"
               />
             </div>
-            <div className="mb-4">
-              <label htmlFor="description" className="block text-sm font-medium text-gray-300">
-                Description
-              </label>
-              <textarea
-                id="description"
-                name="description"
-                value={newDestination.description}
-                onChange={handleInputChange}
-                rows="3"
-                className="mt-1 block w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              ></textarea>
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-300">
-                Select Location
-              </label>
-              <MapPicker onLocationChange={handleLocationChange} />
+            <div className="mt-4">
+              <RouteMap onPlaceSelect={handlePlaceSelect} />
             </div>
             <button
               type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+              className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
             >
               Add Destination
             </button>
           </form>
         </div>
 
+        {/* Display destinations */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {filteredDestinations.map((destination) => (
-            <DestinationCard key={destination.id} destination={destination} />
+          {destinations.map((destination) => (
+            <div key={destination.destination_id} className="bg-gray-800 rounded-lg overflow-hidden">
+              <img src={destination.image_url} alt={destination.destination_name} className="w-full h-48 object-cover" />
+              <div className="p-4">
+                <h3 className="text-xl font-bold">{destination.destination_name}</h3>
+                <p className="text-gray-400">{destination.location}</p>
+                <p className="text-yellow-500">Rating: {destination.rating}</p>
+              </div>
+            </div>
           ))}
         </div>
       </div>
