@@ -7,12 +7,7 @@ CREATE TABLE users (
 );
 
 CREATE TABLE Destination_Master (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(255) NOT NULL,
-  description TEXT,
-  image_url VARCHAR(255),
-  rating DECIMAL(3, 2) DEFAULT 0.00,
-  lat DECIMAL(10, 8),
-  lng DECIMAL(11, 8),
+  id SERIAL PRIMARY KEY,
+  destination_name TEXT NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

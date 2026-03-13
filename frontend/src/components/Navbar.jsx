@@ -28,9 +28,6 @@ const Navbar = () => {
                 <Link href="/hotels" className="hover:text-primary">Hotels</Link>
               </li>
               <li className="ml-4">
-                <Link href="/activities" className="hover:text-primary">Activities</Link>
-              </li>
-              <li className="ml-4">
                 <button onClick={logout} className="hover:text-primary">Logout</button>
               </li>
             </>

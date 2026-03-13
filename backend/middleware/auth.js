@@ -3,8 +3,6 @@ import supabase from '../config/supabase.js';
 export const auth = async (req, res, next) => {
   const authHeader = req.headers.authorization;
 
-  console.log("Authorization header:", authHeader);
-
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ msg: 'No token, authorization denied' });
   }

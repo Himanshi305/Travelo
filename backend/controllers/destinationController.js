@@ -38,19 +38,12 @@ export const getDestination = async (req, res) => {
 
 // CREATE destination
 export const createDestination = async (req, res) => {
-  const { destination_name, location, rating, image_url } = req.body;
+  const { destination_name } = req.body;
 
   try {
     const { data, error } = await supabase
       .from("Destination_Master")
-      .insert([
-        {
-          destination_name,
-          location,
-          rating,
-          image_url
-        }
-      ])
+      .insert([{ destination_name }])
       .select();
 
     if (error) throw error;
@@ -64,16 +57,13 @@ export const createDestination = async (req, res) => {
 
 // UPDATE destination
 export const updateDestination = async (req, res) => {
-  const { destination_name, location, rating, image_url } = req.body;
+  const { destination_name } = req.body;
 
   try {
     const { data, error } = await supabase
       .from("Destination_Master")
       .update({
-        destination_name,
-        location,
-        rating,
-        image_url
+        destination_name
       })
       .eq("destination_id", req.params.id)
       .select();
@@ -97,9 +87,7 @@ export const deleteDestination = async (req, res) => {
       .delete()
       .eq("destination_id", req.params.id);
 
-    if (error) {
-      return res.status(404).json({ msg: "Destination not found" });
-    }
+    if (error) throw error;
 
     res.json({ msg: "Destination deleted" });
   } catch (err) {

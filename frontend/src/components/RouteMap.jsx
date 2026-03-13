@@ -21,9 +21,16 @@ const RouteMap = ({ onPlaceSelect }) => {
   const autocompleteRef = useRef(null);
 
   const handlePlaceChanged = () => {
-    const place = autocompleteRef.current.getPlace();
+    const autocomplete = autocompleteRef.current;
 
-    if (!place.geometry || !place.geometry.location) {
+    if (!autocomplete || typeof autocomplete.getPlace !== 'function') {
+      console.log('Autocomplete is not ready yet');
+      return;
+    }
+
+    const place = autocomplete.getPlace();
+
+    if (!place || !place.geometry || !place.geometry.location) {
       console.log('Autocomplete place is missing geometry');
       return;
     }
@@ -32,7 +39,7 @@ const RouteMap = ({ onPlaceSelect }) => {
     setMapCenter(destination);
 
     if (onPlaceSelect) {
-      onPlaceSelect(place.formatted_address);
+      onPlaceSelect({ name: place.name, address: place.formatted_address });
     }
 
     // Get user's current location and calculate route

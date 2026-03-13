@@ -23,9 +23,7 @@ export const AuthProvider = ({ children }) => {
     const { data: authListener } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setUser(session?.user ?? null);
-        if (event === 'SIGNED_IN') {
-          router.push('/dashboard');
-        }
+        // Redirect on sign-out
         if (event === 'SIGNED_OUT') {
           router.push('/login');
         }
@@ -45,6 +43,9 @@ export const AuthProvider = ({ children }) => {
     });
 
     if (error) throw error;
+
+    // Redirect to dashboard after successful login
+    router.push('/dashboard');
 
     // Save token for backend requests
     const token = data.session.access_token;
