@@ -1,11 +1,13 @@
 'use client';
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import axios from '../../services/axios';
 import RouteMap from '../../components/RouteMap';
 
 const DestinationsPage = () => {
   const [destinations, setDestinations] = useState([]);
   const [saving, setSaving] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     fetchDestinations();
@@ -20,13 +22,25 @@ const DestinationsPage = () => {
     }
   };
 
-  const handlePlaceSelect = async ({ name }) => {
+  const handlePlaceSelect = async ({ name, address, lat, lng }) => {
     setSaving(true);
     try {
       const { data } = await axios.post('/api/destinations', {
         destination_name: name,
       });
       setDestinations((prev) => [...prev, data]);
+
+      localStorage.setItem(
+        'destination',
+        JSON.stringify({
+          name,
+          address,
+          lat,
+          lng,
+        })
+      );
+
+      router.push('/hotels');
     } catch (error) {
       console.error('Failed to save destination:', error);
     } finally {

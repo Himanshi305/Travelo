@@ -2,12 +2,12 @@
 
 import {
   GoogleMap,
-  LoadScript,
   Marker,
   DirectionsService,
   DirectionsRenderer,
 } from "@react-google-maps/api";
 import { useState, useEffect } from "react";
+import GoogleMapsLoader from "./GoogleMapsLoader";
 
 const containerStyle = {
   width: "100%",
@@ -70,7 +70,7 @@ export default function MapPicker({ onLocationChange }) {
   };
 
   return (
-    <LoadScript googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}>
+    <GoogleMapsLoader>
       <GoogleMap mapContainerStyle={containerStyle} center={origin || center} zoom={10}>
         {origin && <Marker position={origin} label="A" />}
         {destination && <Marker position={destination} label="B" onClick={handleClick} />}
@@ -94,6 +94,6 @@ export default function MapPicker({ onLocationChange }) {
           />
         )}
       </GoogleMap>
-    </LoadScript>
+    </GoogleMapsLoader>
   );
 }

@@ -1,8 +1,9 @@
 'use client';
 import React, { useState, useEffect } from 'react';
-import { GoogleMap, LoadScript, Marker } from '@react-google-maps/api';
+import { GoogleMap, Marker, Autocomplete } from '@react-google-maps/api';
 import axios from '../../services/axios';
 import HotelCard from '../../components/HotelCard';
+import GoogleMapsLoader from '../../components/GoogleMapsLoader';
 
 const containerStyle = {
   width: '100%',
@@ -12,13 +13,17 @@ const containerStyle = {
 const HotelsPage = () => {
   const [hotels, setHotels] = useState([]);
   const [destination, setDestination] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [mapCenter, setMapCenter] = useState({ lat: 28.6139, lng: 77.209 }); // Default center
+  const [isSearching, setIsSearching] = useState(false);
+  const autocompleteRef = React.useRef(null);
 
   useEffect(() => {
     const storedDestination = localStorage.getItem('destination');
     if (storedDestination) {
       const parsedDestination = JSON.parse(storedDestination);
       setDestination(parsedDestination);
+      setSearchQuery(parsedDestination.name || '');
       const center = { lat: parsedDestination.lat, lng: parsedDestination.lng };
       setMapCenter(center);
       fetchNearbyHotels(center.lat, center.lng);
@@ -26,12 +31,44 @@ const HotelsPage = () => {
   }, []);
 
   const fetchNearbyHotels = async (lat, lng) => {
+    setIsSearching(true);
     try {
       const { data } = await axios.get(`/api/hotels/nearby?lat=${lat}&lng=${lng}`);
       setHotels(data);
     } catch (error) {
       console.error('Failed to fetch nearby hotels:', error);
+    } finally {
+      setIsSearching(false);
     }
+  };
+
+  const handlePlaceChanged = () => {
+    const autocomplete = autocompleteRef.current;
+
+    if (!autocomplete || typeof autocomplete.getPlace !== 'function') {
+      return;
+    }
+
+    const place = autocomplete.getPlace();
+
+    if (!place || !place.geometry || !place.geometry.location) {
+      return;
+    }
+
+    const lat = place.geometry.location.lat();
+    const lng = place.geometry.location.lng();
+    const selectedDestination = {
+      name: place.name || place.formatted_address || searchQuery,
+      address: place.formatted_address || '',
+      lat,
+      lng,
+    };
+
+    setDestination(selectedDestination);
+    setSearchQuery(selectedDestination.name || '');
+    setMapCenter({ lat, lng });
+    localStorage.setItem('destination', JSON.stringify(selectedDestination));
+    fetchNearbyHotels(lat, lng);
   };
 
   return (
@@ -44,8 +81,25 @@ const HotelsPage = () => {
           Showing hotels within a 5km radius
         </p>
 
-        <div className="mb-8">
-          <LoadScript googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}>
+        <GoogleMapsLoader libraries={['places']}>
+          <div className="mb-6 bg-gray-800 rounded-lg p-4">
+            <Autocomplete
+              onLoad={(autocomplete) => {
+                autocompleteRef.current = autocomplete;
+              }}
+              onPlaceChanged={handlePlaceChanged}
+            >
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search destination to find nearby hotels"
+                className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </Autocomplete>
+          </div>
+
+          <div className="mb-8">
             <GoogleMap
               mapContainerStyle={containerStyle}
               center={mapCenter}
@@ -59,11 +113,13 @@ const HotelsPage = () => {
                 />
               ))}
             </GoogleMap>
-          </LoadScript>
-        </div>
+          </div>
+        </GoogleMapsLoader>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {hotels.length > 0 ? (
+          {isSearching ? (
+            <p>Searching hotels near your destination...</p>
+          ) : hotels.length > 0 ? (
             hotels.map((hotel) => <HotelCard key={hotel.hotel_id} hotel={hotel} />)
           ) : (
             <p>No hotels found nearby.</p>

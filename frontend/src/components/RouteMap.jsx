@@ -2,11 +2,11 @@
 
 import {
   GoogleMap,
-  LoadScript,
   DirectionsRenderer,
   Autocomplete,
 } from '@react-google-maps/api';
 import { useState, useRef } from 'react';
+import GoogleMapsLoader from './GoogleMapsLoader';
 
 const containerStyle = {
   width: '100%',
@@ -38,8 +38,15 @@ const RouteMap = ({ onPlaceSelect }) => {
     const destination = place.geometry.location;
     setMapCenter(destination);
 
+    const selectedDestination = {
+      name: place.name,
+      address: place.formatted_address,
+      lat: destination.lat(),
+      lng: destination.lng(),
+    };
+
     if (onPlaceSelect) {
-      onPlaceSelect({ name: place.name, address: place.formatted_address });
+      onPlaceSelect(selectedDestination);
     }
 
     // Get user's current location and calculate route
@@ -59,10 +66,13 @@ const RouteMap = ({ onPlaceSelect }) => {
               travelMode: window.google.maps.TravelMode.DRIVING,
             },
             (result, status) => {
-              if (status === window.google.maps.DirectionsStatus.OK) {
+              if (status === 'OK' && result) {
                 setDirections(result);
               } else {
-                console.error(`error fetching directions ${result}`);
+                console.error('Error fetching directions:', {
+                  status,
+                  result,
+                });
               }
             }
           );
@@ -76,10 +86,7 @@ const RouteMap = ({ onPlaceSelect }) => {
   };
 
   return (
-    <LoadScript
-      googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
-      libraries={['places']}
-    >
+    <GoogleMapsLoader libraries={['places']}>
       <div className="mb-4">
         <Autocomplete
           onLoad={(autocomplete) => {
@@ -101,7 +108,7 @@ const RouteMap = ({ onPlaceSelect }) => {
       >
         {directions && <DirectionsRenderer directions={directions} />}
       </GoogleMap>
-    </LoadScript>
+    </GoogleMapsLoader>
   );
 };
 
