@@ -33,8 +33,8 @@ const HotelsPage = () => {
   const fetchNearbyHotels = async (lat, lng) => {
     setIsSearching(true);
     try {
-      const { data } = await axios.get(`/api/hotels/nearby?lat=${lat}&lng=${lng}`);
-      setHotels(data);
+      const response = await axios.get(`/api/hotels/nearby?lat=${lat}&lng=${lng}`);
+      setHotels(response.data);
     } catch (error) {
       console.error('Failed to fetch nearby hotels:', error);
     } finally {
@@ -105,6 +105,18 @@ const HotelsPage = () => {
               center={mapCenter}
               zoom={13}
             >
+              {/* Destination marker */}
+              {destination && (
+                <Marker
+                  position={{ lat: destination.lat, lng: destination.lng }}
+                  title={destination.name || 'Destination'}
+                  icon={{
+                    url: 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+                    scaledSize: { width: 40, height: 40 },
+                  }}
+                />
+              )}
+              {/* Hotel markers */}
               {hotels.map((hotel) => (
                 <Marker
                   key={hotel.hotel_id}
