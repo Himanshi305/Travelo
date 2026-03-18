@@ -9,6 +9,7 @@ const normalizeGoogleHotel = (hotelData) => ({
   rating: hotelData.rating || 0,
   price_per_night: 0,
   contact_no: '',
+  photo_reference: hotelData.photos?.[0]?.photo_reference || null,
   lat: hotelData.geometry?.location?.lat || null,
   lng: hotelData.geometry?.location?.lng || null,
 });

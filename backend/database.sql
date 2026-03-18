@@ -11,3 +11,14 @@ CREATE TABLE Destination_Master (
   destination_name TEXT NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE Booking_Details (
+  booking_id TEXT PRIMARY KEY,
+  hotel_id TEXT NOT NULL,
+  hotel_name TEXT,
+  user_id TEXT,
+  guest_name TEXT NOT NULL,
+  phone_no TEXT NOT NULL,
+  checkin_date DATE NOT NULL,
+  checkout_date DATE NOT NULL
+);

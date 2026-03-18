@@ -17,9 +17,32 @@ const Rating = ({ value }) => {
   );
 };
 
-const HotelCard = ({ hotel }) => {
+const getHotelImage = (hotel) => {
+  if (hotel.photo_reference && process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) {
+    return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${hotel.photo_reference}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`;
+  }
+
+  return `https://source.unsplash.com/800x500/?hotel,${encodeURIComponent(hotel.hotel_name || 'travel')}`;
+};
+
+const HotelCard = ({ hotel, onSelect }) => {
+  const handleClick = () => {
+    if (onSelect) {
+      onSelect(hotel);
+    }
+  };
+
   return (
-    <div className="bg-gray-800 rounded-lg overflow-hidden shadow-lg transform hover:scale-105 transition-transform duration-300">
+    <button
+      type="button"
+      onClick={handleClick}
+      className="bg-gray-800 rounded-lg overflow-hidden shadow-lg transform hover:scale-105 transition-transform duration-300 text-left w-full"
+    >
+      <img
+        src={getHotelImage(hotel)}
+        alt={hotel.hotel_name}
+        className="h-48 w-full object-cover"
+      />
       <div className="p-4">
         <h3 className="text-xl font-bold text-white">{hotel.hotel_name}</h3>
         <p className="text-gray-400 text-sm mt-1">{hotel.address}</p>
@@ -35,7 +58,7 @@ const HotelCard = ({ hotel }) => {
           {hotel.contact_no && <p className="text-sm text-gray-400 mt-1">Contact: {hotel.contact_no}</p>}
         </div>
       </div>
-    </div>
+    </button>
   );
 };
 
