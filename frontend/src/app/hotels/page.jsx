@@ -157,7 +157,6 @@ const HotelsPage = () => {
     try {
       const payload = {
         hotel_id: selectedHotel.hotel_id,
-        hotel_name: selectedHotel.hotel_name,
         ...bookingForm,
       };
 

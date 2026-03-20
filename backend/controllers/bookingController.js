@@ -40,7 +40,6 @@ const isMissingTableError = (error) => {
 export const createBooking = async (req, res) => {
   const {
     hotel_id,
-    hotel_name,
     guest_name,
     phone_no,
     checkin_date,
@@ -49,7 +48,6 @@ export const createBooking = async (req, res) => {
 
   const payload = {
     hotel_id,
-    hotel_name: hotel_name || null,
     user_id: req.user?.id || null,
     guest_name,
     phone_no,
