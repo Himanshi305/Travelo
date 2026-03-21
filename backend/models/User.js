@@ -2,10 +2,10 @@ import supabase from "../config/supabase.js";
 
 const User = {
 
-  create: async (email, password, role) => {
+  create: async (name, email, password, role) => {
     const { data, error } = await supabase
       .from("users")
-      .insert([{ email, password, role }]);
+      .insert([{ name, email, password, role }]);
 
     if (error) throw error;
     return data;

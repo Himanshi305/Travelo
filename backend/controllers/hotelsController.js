@@ -1,9 +1,8 @@
-import { nanoid } from 'nanoid';
 import axios from 'axios';
 import supabase from '../config/supabase.js';
 
 const normalizeGoogleHotel = (hotelData) => ({
-  hotel_id: hotelData.place_id || `hot_${nanoid(8)}`,
+  google_place_id: hotelData.place_id || null,
   hotel_name: hotelData.name || 'Unnamed hotel',
   address: hotelData.vicinity || hotelData.formatted_address || '',
   rating: hotelData.rating || 0,
@@ -41,7 +40,6 @@ const saveHotel = async (hotelData) => {
   }
 
   const newHotel = {
-    hotel_id: `hot_${nanoid(8)}`,
     hotel_name: normalizedHotel.hotel_name,
     address: normalizedHotel.address,
     rating: normalizedHotel.rating,
@@ -171,13 +169,65 @@ export const getAllHotels = async (req, res) => {
 
 // POST a new hotel to our database
 export const createHotel = async (req, res) => {
-  const { hotel_name, address, price_per_night, contact_no, rating } = req.body;
-  const hotel_id = `hot_${nanoid(8)}`;
+  const {
+    hotel_name,
+    booking_id,
+    address,
+    price_per_night = 0,
+    contact_no = '',
+    rating = 0,
+  } = req.body;
+
+  if (!hotel_name || !address) {
+    return res.status(400).json({ error: 'hotel_name and address are required.' });
+  }
 
   try {
+    const { data: existingHotel, error: existingHotelError } = await supabase
+      .from('Hotel_Master')
+      .select('*')
+      .eq('hotel_name', hotel_name)
+      .eq('address', address)
+      .single();
+
+    if (existingHotelError && existingHotelError.code !== 'PGRST116') {
+      throw existingHotelError;
+    }
+
+    if (existingHotel) {
+      const updates = {
+        price_per_night: Number(price_per_night) || 0,
+        contact_no,
+        rating: Number(rating) || 0,
+      };
+
+      if (booking_id) {
+        updates.booking_id = booking_id;
+      }
+
+      const { data, error } = await supabase
+        .from('Hotel_Master')
+        .update(updates)
+        .eq('hotel_id', existingHotel.hotel_id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return res.status(200).json(data);
+    }
+
+    const payload = {
+      hotel_name,
+      booking_id: booking_id || null,
+      address,
+      price_per_night: Number(price_per_night) || 0,
+      contact_no,
+      rating: Number(rating) || 0,
+    };
+
     const { data, error } = await supabase
       .from('Hotel_Master')
-      .insert([{ hotel_id, hotel_name, address, price_per_night, contact_no, rating }])
+      .insert(payload)
       .select()
       .single();
 

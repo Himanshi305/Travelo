@@ -22,7 +22,7 @@ export const getDestination = async (req, res) => {
     const { data, error } = await supabase
       .from("Destination_Master")
       .select("*")
-      .eq("destination_id", req.params.id)
+      .eq("id", req.params.id)
       .single();
 
     if (error) {
@@ -63,9 +63,9 @@ export const updateDestination = async (req, res) => {
     const { data, error } = await supabase
       .from("Destination_Master")
       .update({
-        destination_name
+        destination_name,
       })
-      .eq("destination_id", req.params.id)
+      .eq("id", req.params.id)
       .select();
 
     if (error || data.length === 0) {
@@ -85,7 +85,7 @@ export const deleteDestination = async (req, res) => {
     const { error } = await supabase
       .from("Destination_Master")
       .delete()
-      .eq("destination_id", req.params.id);
+      .eq("id", req.params.id);
 
     if (error) throw error;
 

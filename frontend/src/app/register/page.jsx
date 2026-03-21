@@ -4,6 +4,7 @@ import React, { useState, useContext } from 'react';
 import AuthContext from '../../context/AuthContext';
 
 const Register = () => {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('user');
@@ -11,7 +12,7 @@ const Register = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    register(email, password, role);
+    register(name, email, password, role);
   };
 
   return (
@@ -28,6 +29,19 @@ const Register = () => {
       <div className="relative z-10 w-full max-w-md p-8 space-y-6 bg-white/10 rounded-lg shadow-lg backdrop-blur-sm">
         <h2 className="text-3xl font-bold text-center text-white">Register</h2>
         <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-300">
+              Name
+            </label>
+            <input
+              type="text"
+              placeholder="Full Name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              className="w-full px-4 py-2 mt-2 text-gray-900 bg-white rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-300">
               Email

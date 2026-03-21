@@ -6,6 +6,7 @@ import RouteMap from '../../components/RouteMap';
 
 const DestinationsPage = () => {
   const [destinations, setDestinations] = useState([]);
+  const [selectedDestinationName, setSelectedDestinationName] = useState('');
   const [saving, setSaving] = useState(false);
   const router = useRouter();
 
@@ -66,18 +67,22 @@ const DestinationsPage = () => {
         <div className="mb-8 bg-gray-800/50 backdrop-blur-sm p-6 rounded-lg">
           <h2 className="text-3xl font-bold mb-4">Add a New Destination</h2>
           <p className="text-gray-300 mb-4">Search for a place on the map — it will be saved automatically when selected.</p>
-          <RouteMap onPlaceSelect={handlePlaceSelect} />
+          <RouteMap onPlaceSelect={handlePlaceSelect} selectedDestinationName={selectedDestinationName} />
           {saving && <p className="mt-2 text-blue-400">Saving destination...</p>}
         </div>
 
         {/* Display destinations */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {destinations.map((destination) => (
-            <div key={destination.destination_id} className="bg-gray-800 rounded-lg p-4">
-              <div>
-                <h3 className="text-xl font-bold">{destination.destination_name}</h3>
-              </div>
-            </div>
+            <button
+              key={destination.id}
+              type="button"
+              onClick={() => setSelectedDestinationName(destination.destination_name)}
+              className="bg-gray-800 rounded-lg p-4 text-left hover:bg-gray-700 transition-colors"
+            >
+              <h3 className="text-xl font-bold">{destination.destination_name}</h3>
+              <p className="text-xs text-blue-300 mt-3">Click to show route on map</p>
+            </button>
           ))}
         </div>
       </div>

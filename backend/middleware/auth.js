@@ -31,7 +31,7 @@ export const auth = async (req, res, next) => {
 };
 
 export const isAdmin = (req, res, next) => {
-  if (req.user && req.user.role === 'admin') {
+  if (req.user && req.user.user_metadata?.role === 'admin') {
     next();
   } else {
     res.status(403).json({ msg: 'Admin access required' });
@@ -39,7 +39,7 @@ export const isAdmin = (req, res, next) => {
 };
 
 export const isVendor = (req, res, next) => {
-  if (req.user && req.user.role === 'vendor') {
+  if (req.user && req.user.user_metadata?.role === 'vendor') {
     next();
   } else {
     res.status(403).json({ msg: 'Vendor access required' });

@@ -5,7 +5,7 @@ import {
   DirectionsRenderer,
   Autocomplete,
 } from '@react-google-maps/api';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import GoogleMapsLoader from './GoogleMapsLoader';
 
 const containerStyle = {
@@ -15,10 +15,74 @@ const containerStyle = {
 
 const center = { lat: 28.6139, lng: 77.209 }; // Default to Delhi
 
-const RouteMap = ({ onPlaceSelect }) => {
+const RouteMap = ({ onPlaceSelect, selectedDestinationName = '' }) => {
   const [directions, setDirections] = useState(null);
   const [mapCenter, setMapCenter] = useState(center);
   const autocompleteRef = useRef(null);
+
+  const renderRouteToDestination = (destinationLocation) => {
+    if (!destinationLocation || !window.google?.maps) {
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const origin = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+
+        const directionsService = new window.google.maps.DirectionsService();
+        directionsService.route(
+          {
+            origin,
+            destination: destinationLocation,
+            travelMode: window.google.maps.TravelMode.DRIVING,
+          },
+          (result, status) => {
+            if (status === 'OK' && result) {
+              setDirections(result);
+            } else {
+              console.error('Error fetching directions:', {
+                status,
+                result,
+              });
+            }
+          }
+        );
+      },
+      () => {
+        console.error('Geolocation failed or was denied.');
+      }
+    );
+  };
+
+  useEffect(() => {
+    if (!selectedDestinationName || !window.google?.maps) {
+      return;
+    }
+
+    const geocoder = new window.google.maps.Geocoder();
+    geocoder.geocode({ address: selectedDestinationName }, (results, status) => {
+      if (status !== 'OK' || !results?.[0]?.geometry?.location) {
+        console.error('Failed to geocode selected destination:', status);
+        return;
+      }
+
+      const location = results[0].geometry.location;
+      const destinationLocation = {
+        lat: location.lat(),
+        lng: location.lng(),
+      };
+
+      setMapCenter(destinationLocation);
+      renderRouteToDestination(destinationLocation);
+    });
+  }, [selectedDestinationName]);
 
   const handlePlaceChanged = () => {
     const autocomplete = autocompleteRef.current;
@@ -36,53 +100,24 @@ const RouteMap = ({ onPlaceSelect }) => {
     }
 
     const destination = place.geometry.location;
-    setMapCenter(destination);
+    const destinationLocation = {
+      lat: destination.lat(),
+      lng: destination.lng(),
+    };
+    setMapCenter(destinationLocation);
 
     const selectedDestination = {
       name: place.name,
       address: place.formatted_address,
-      lat: destination.lat(),
-      lng: destination.lng(),
+      lat: destinationLocation.lat,
+      lng: destinationLocation.lng,
     };
 
     if (onPlaceSelect) {
       onPlaceSelect(selectedDestination);
     }
 
-    // Get user's current location and calculate route
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const origin = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          };
-
-          const directionsService = new window.google.maps.DirectionsService();
-          directionsService.route(
-            {
-              origin: origin,
-              destination: destination,
-              travelMode: window.google.maps.TravelMode.DRIVING,
-            },
-            (result, status) => {
-              if (status === 'OK' && result) {
-                setDirections(result);
-              } else {
-                console.error('Error fetching directions:', {
-                  status,
-                  result,
-                });
-              }
-            }
-          );
-        },
-        () => {
-          // Handle geolocation error (e.g., user denies permission)
-          console.error('Geolocation failed or was denied.');
-        }
-      );
-    }
+    renderRouteToDestination(destinationLocation);
   };
 
   return (

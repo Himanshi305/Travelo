@@ -25,16 +25,18 @@ const HotelsPage = () => {
   const [bookingStatus, setBookingStatus] = useState({ type: '', message: '' });
   const [bookingForm, setBookingForm] = useState({
     guest_name: '',
+    email: '',
     phone_no: '',
     checkin_date: '',
     checkout_date: '',
+    amount: '',
   });
   const autocompleteRef = React.useRef(null);
 
   useEffect(() => {
     setBookingForm((prev) => ({
       ...prev,
-      guest_email: user?.email || prev.guest_email,
+      email: user?.email || prev.email,
     }));
   }, [user]);
 
@@ -104,28 +106,47 @@ const HotelsPage = () => {
       return 'https://www.google.com/travel/hotels';
     }
 
-    if (hotel.hotel_id && !String(hotel.hotel_id).startsWith('hot_')) {
-      return `https://www.google.com/maps/place/?q=place_id:${hotel.hotel_id}`;
+    if (hotel.google_place_id) {
+      return `https://www.google.com/maps/place/?q=place_id:${hotel.google_place_id}`;
     }
 
     const query = `${hotel.hotel_name || 'hotel'} ${hotel.address || ''}`.trim();
     return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
   };
 
-  const openHotelModal = (hotel) => {
-    setSelectedHotel(hotel);
+  const saveSelectedHotel = async (hotel) => {
+    try {
+      const { data } = await axios.post('/api/hotels', {
+        hotel_name: hotel.hotel_name,
+        address: hotel.address || '',
+        price_per_night: Number(hotel.price_per_night || 0),
+        contact_no: hotel.contact_no || '',
+        rating: Number(hotel.rating || 0),
+      });
+
+      return {
+        ...hotel,
+        ...data,
+      };
+    } catch (error) {
+      console.error('Failed to save selected hotel:', error);
+      return hotel;
+    }
+  };
+
+  const openHotelModal = async (hotel) => {
+    const persistedHotel = await saveSelectedHotel(hotel);
+    setSelectedHotel(persistedHotel);
     setShowBookingForm(false);
     setBookingStatus({ type: '', message: '' });
     setBookingForm((prev) => ({
       ...prev,
       guest_name: '',
-      guest_email: user?.email || prev.guest_email || '',
+      email: user?.email || prev.email || '',
       phone_no: '',
       checkin_date: '',
       checkout_date: '',
-      total_guests: 1,
-      total_rooms: 1,
-      special_requests: '',
+      amount: hotel?.price_per_night > 0 ? Number(hotel.price_per_night).toFixed(2) : '',
     }));
   };
 
@@ -157,7 +178,12 @@ const HotelsPage = () => {
     try {
       const payload = {
         hotel_id: selectedHotel.hotel_id,
-        ...bookingForm,
+        guest_name: bookingForm.guest_name,
+        email: bookingForm.email,
+        phone_no: bookingForm.phone_no,
+        checkin_date: bookingForm.checkin_date,
+        checkout_date: bookingForm.checkout_date,
+        amount: bookingForm.amount,
       };
 
       const { data } = await axios.post('/api/bookings', payload);
@@ -334,8 +360,8 @@ const HotelsPage = () => {
                       <label className="block text-sm text-gray-300 mb-1">Email</label>
                       <input
                         type="email"
-                        name="guest_email"
-                        value={bookingForm.guest_email}
+                        name="email"
+                        value={bookingForm.email}
                         onChange={handleBookingInput}
                         required
                         className="w-full rounded-md border border-gray-600 bg-gray-700 px-3 py-2"
@@ -381,41 +407,18 @@ const HotelsPage = () => {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm text-gray-300 mb-1">Guests</label>
+                      <label className="block text-sm text-gray-300 mb-1">Amount</label>
                       <input
                         type="number"
-                        min="1"
-                        name="total_guests"
-                        value={bookingForm.total_guests}
+                        min="0"
+                        step="0.01"
+                        name="amount"
+                        value={bookingForm.amount}
                         onChange={handleBookingInput}
                         required
                         className="w-full rounded-md border border-gray-600 bg-gray-700 px-3 py-2"
                       />
                     </div>
-
-                    <div>
-                      <label className="block text-sm text-gray-300 mb-1">Rooms</label>
-                      <input
-                        type="number"
-                        min="1"
-                        name="total_rooms"
-                        value={bookingForm.total_rooms}
-                        onChange={handleBookingInput}
-                        required
-                        className="w-full rounded-md border border-gray-600 bg-gray-700 px-3 py-2"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm text-gray-300 mb-1">Special Requests (Optional)</label>
-                    <textarea
-                      name="special_requests"
-                      value={bookingForm.special_requests}
-                      onChange={handleBookingInput}
-                      rows="3"
-                      className="w-full rounded-md border border-gray-600 bg-gray-700 px-3 py-2"
-                    />
                   </div>
 
                   {bookingStatus.message && (

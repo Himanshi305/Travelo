@@ -8,6 +8,7 @@ import DestinationModal from '../../components/DestinationModal';
 const Dashboard = () => {
   const { user } = useContext(AuthContext);
   const [destinations, setDestinations] = useState([]);
+  const [hotels, setHotels] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDestination, setSelectedDestination] = useState(null);
 
@@ -15,12 +16,22 @@ const Dashboard = () => {
     if (user?.user_metadata?.role === 'admin') {
       fetchDestinations();
     }
+    fetchHotels();
   }, [user]);
 
   const fetchDestinations = async () => {
     try {
       const res = await axios.get('/api/destinations');
       setDestinations(res.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchHotels = async () => {
+    try {
+      const res = await axios.get('/api/hotels');
+      setHotels(res.data || []);
     } catch (err) {
       console.error(err);
     }
@@ -74,9 +85,43 @@ const Dashboard = () => {
       </div>
       <div className="relative container mx-auto px-4 py-8">
         <h1 className="text-5xl font-bold mb-8 text-center">Dashboard</h1>
-        <p className="mb-8 text-center text-lg">Welcome, {user?.email}</p>
 
-        {user?.role === 'admin' && (
+        <div className="mb-8 bg-gray-800/60 backdrop-blur-sm rounded-lg p-6 border border-gray-700">
+          <h2 className="text-2xl font-bold mb-4">User Info</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-gray-200">
+            <div className="bg-gray-700/60 rounded-md p-4">
+              <p className="text-sm text-gray-300">Name</p>
+              <p className="text-lg font-semibold">{user?.user_metadata?.name || 'Not provided'}</p>
+            </div>
+            <div className="bg-gray-700/60 rounded-md p-4">
+              <p className="text-sm text-gray-300">Email</p>
+              <p className="text-lg font-semibold">{user?.email || 'Not available'}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-8 bg-gray-800/50 backdrop-blur-sm p-6 rounded-lg">
+          <h2 className="text-3xl font-bold mb-6">Stored Hotels</h2>
+          {hotels.length === 0 ? (
+            <p className="text-gray-300">No hotels stored yet.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {hotels.map((hotel) => (
+                <div key={hotel.hotel_id} className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                  <h3 className="text-xl font-bold">{hotel.hotel_name}</h3>
+                  <p className="text-sm text-gray-300 mt-1">{hotel.address}</p>
+                  <div className="mt-3 text-sm text-gray-300 space-y-1">
+                    <p>Rating: {Number(hotel.rating || 0).toFixed(1)}</p>
+                    <p>Price/Night: ${Number(hotel.price_per_night || 0).toFixed(2)}</p>
+                    {hotel.contact_no && <p>Contact: {hotel.contact_no}</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {user?.user_metadata?.role === 'admin' && (
           <div className="bg-gray-800/50 backdrop-blur-sm p-6 rounded-lg">
             <div className="flex justify-between items-center mb-8">
               <h2 className="text-3xl font-bold">Manage Destinations</h2>
@@ -100,7 +145,7 @@ const Dashboard = () => {
                   {destinations.map((dest) => (
                     <tr key={dest.id} className="border-b border-gray-700 hover:bg-gray-700/50">
                       <td className="py-3 px-6 text-left whitespace-nowrap">
-                        <span className="font-medium">{dest.name}</span>
+                        <span className="font-medium">{dest.destination_name}</span>
                       </td>
                       <td className="py-3 px-6 text-center">
                         <div className="flex item-center justify-center">

@@ -6,6 +6,7 @@ import { check } from 'express-validator';
 router.post(
   '/register',
   [
+    check('name', 'Name is required').not().isEmpty(),
     check('email', 'Please include a valid email').isEmail(),
     check('password', 'Password is required').exists()
   ],

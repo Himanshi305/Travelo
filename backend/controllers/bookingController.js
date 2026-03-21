@@ -2,7 +2,7 @@ import { nanoid } from 'nanoid';
 import supabase from '../config/supabase.js';
 
 const validateBookingPayload = (payload) => {
-  const requiredFields = ['hotel_id', 'guest_name', 'phone_no', 'checkin_date', 'checkout_date'];
+  const requiredFields = ['hotel_id', 'guest_name', 'phone_no', 'checkin_date', 'checkout_date', 'email', 'amount'];
 
   for (const field of requiredFields) {
     if (!payload[field]) {
@@ -21,12 +21,14 @@ const validateBookingPayload = (payload) => {
     return 'Check-out date must be after check-in date.';
   }
 
-  if (payload.total_guests && Number(payload.total_guests) < 1) {
-    return 'total_guests must be at least 1.';
+  const emailPattern = /^\S+@\S+\.\S+$/;
+  if (!emailPattern.test(String(payload.email || '').trim())) {
+    return 'email must be a valid email address.';
   }
 
-  if (payload.total_rooms && Number(payload.total_rooms) < 1) {
-    return 'total_rooms must be at least 1.';
+  const amount = Number(payload.amount);
+  if (!Number.isFinite(amount) || amount < 0) {
+    return 'amount must be a valid non-negative number.';
   }
 
   return null;
@@ -44,15 +46,18 @@ export const createBooking = async (req, res) => {
     phone_no,
     checkin_date,
     checkout_date,
+    email,
+    amount,
   } = req.body;
 
   const payload = {
     hotel_id,
-    user_id: req.user?.id || null,
     guest_name,
     phone_no,
     checkin_date,
-    checkout_date
+    checkout_date,
+    email,
+    amount: Number(amount),
   };
 
   const validationError = validateBookingPayload(payload);
@@ -91,8 +96,17 @@ export const createBooking = async (req, res) => {
 
       return res.status(500).json({
         error:
-          'Failed to save booking details. Booking table is missing in Supabase. Create table booking_details in public schema and retry.',
+          'Failed to save booking details. Booking table is missing in Supabase. Create table Booking_Details in public schema and retry.',
       });
+    }
+
+    const { error: hotelUpdateError } = await supabase
+      .from('Hotel_Master')
+      .update({ booking_id })
+      .eq('hotel_id', hotel_id);
+
+    if (hotelUpdateError) {
+      console.error('[createBooking] Failed to update Hotel_Master booking_id:', hotelUpdateError);
     }
 
     return res.status(201).json({
