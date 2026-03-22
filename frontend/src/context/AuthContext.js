@@ -6,6 +6,17 @@ import { useRouter } from 'next/navigation';
 
 const AuthContext = createContext();
 
+const clearClientUserData = () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('destination');
+
+  Object.keys(localStorage).forEach((key) => {
+    if (key.startsWith('destination:')) {
+      localStorage.removeItem(key);
+    }
+  });
+};
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -14,7 +25,19 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const getSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      setUser(session?.user ?? null);
+      const currentUser = session?.user ?? null;
+
+      if (currentUser) {
+        const previousAuthUserId = localStorage.getItem('auth_user_id');
+        if (previousAuthUserId && previousAuthUserId !== currentUser.id) {
+          clearClientUserData();
+        }
+        localStorage.setItem('auth_user_id', currentUser.id);
+      } else {
+        localStorage.removeItem('auth_user_id');
+      }
+
+      setUser(currentUser);
       setLoading(false);
     };
 
@@ -22,9 +45,22 @@ export const AuthProvider = ({ children }) => {
 
     const { data: authListener } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        setUser(session?.user ?? null);
+        const nextUser = session?.user ?? null;
+
+        if (event === 'SIGNED_IN' && nextUser) {
+          const previousAuthUserId = localStorage.getItem('auth_user_id');
+          if (previousAuthUserId && previousAuthUserId !== nextUser.id) {
+            clearClientUserData();
+          }
+          localStorage.setItem('auth_user_id', nextUser.id);
+        }
+
+        setUser(nextUser);
+
         // Redirect on sign-out
         if (event === 'SIGNED_OUT') {
+          localStorage.removeItem('auth_user_id');
+          clearClientUserData();
           router.push('/login');
         }
       }
@@ -58,6 +94,12 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (name, email, password, role) => {
     try {
+      // Prevent previous logged-in user data from bleeding into a new registration flow.
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        await supabase.auth.signOut();
+      }
+
       const { error } = await supabase.auth.signUp({
         email,
         password,
@@ -79,7 +121,8 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
   try {
     await supabase.auth.signOut();
-    localStorage.removeItem("token");
+    localStorage.removeItem('auth_user_id');
+    clearClientUserData();
     setUser(null);
     router.push("/login");
   } catch (err) {

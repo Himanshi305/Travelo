@@ -1,18 +1,25 @@
 'use client';
 import React, { useState, useEffect } from 'react';
+import { useContext } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from '../../services/axios';
 import RouteMap from '../../components/RouteMap';
+import AuthContext from '../../context/AuthContext';
+
+const getDestinationStorageKey = (userId) => `destination:${userId || 'guest'}`;
 
 const DestinationsPage = () => {
+  const { user } = useContext(AuthContext);
   const [destinations, setDestinations] = useState([]);
   const [selectedDestinationName, setSelectedDestinationName] = useState('');
   const [saving, setSaving] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
-    fetchDestinations();
-  }, []);
+    if (user?.id) {
+      fetchDestinations();
+    }
+  }, [user?.id]);
 
   const fetchDestinations = async () => {
     try {
@@ -32,8 +39,9 @@ const DestinationsPage = () => {
       setDestinations((prev) => [...prev, data]);
 
       localStorage.setItem(
-        'destination',
+        getDestinationStorageKey(user?.id),
         JSON.stringify({
+          id: data?.id ?? null,
           name,
           address,
           lat,

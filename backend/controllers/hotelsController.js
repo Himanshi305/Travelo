@@ -2,10 +2,11 @@ import axios from 'axios';
 import supabase from '../config/supabase.js';
 
 const normalizeGoogleHotel = (hotelData) => ({
-  google_place_id: hotelData.place_id || null,
+  hotel_id: hotelData.place_id ? String(hotelData.place_id) : null,
+  place_id: hotelData.place_id ? String(hotelData.place_id) : null,
   hotel_name: hotelData.name || 'Unnamed hotel',
   address: hotelData.vicinity || hotelData.formatted_address || '',
-  rating: hotelData.rating || 0,
+  rating: Number(hotelData.rating || 0),
   price_per_night: 0,
   contact_no: '',
   photo_reference: hotelData.photos?.[0]?.photo_reference || null,
@@ -13,51 +14,34 @@ const normalizeGoogleHotel = (hotelData) => ({
   lng: hotelData.geometry?.location?.lng || null,
 });
 
-// Helper to check for existing hotel and save if new
 const saveHotel = async (hotelData) => {
   const normalizedHotel = normalizeGoogleHotel(hotelData);
+  if (!normalizedHotel.hotel_id) {
+    console.warn('[saveHotel] Skipping hotel with missing place_id:', normalizedHotel.hotel_name);
+    return null;
+  }
+
   console.log(`[saveHotel] Processing: "${normalizedHotel.hotel_name}" at "${normalizedHotel.address}"`);
 
-  const { data: existingHotel, error: existingHotelError } = await supabase
-    .from('Hotel_Master')
-    .select('*')
-    .eq('hotel_name', normalizedHotel.hotel_name)
-    .eq('address', normalizedHotel.address)
-    .single();
-
-  if (existingHotelError && existingHotelError.code !== 'PGRST116') {
-    console.error(`[saveHotel] Error checking existing hotel "${normalizedHotel.hotel_name}":`, existingHotelError);
-  }
-
-  if (existingHotel) {
-    console.log(`[saveHotel] Already exists in DB: "${normalizedHotel.hotel_name}"`);
-    return {
-      ...normalizedHotel,
-      ...existingHotel,
-      lat: normalizedHotel.lat,
-      lng: normalizedHotel.lng,
-    };
-  }
-
-  const newHotel = {
+  const payload = {
+    hotel_id: normalizedHotel.hotel_id,
     hotel_name: normalizedHotel.hotel_name,
     address: normalizedHotel.address,
     rating: normalizedHotel.rating,
-    price_per_night: normalizedHotel.price_per_night,
-    contact_no: normalizedHotel.contact_no,
   };
 
   const { data, error } = await supabase
     .from('Hotel_Master')
-    .insert(newHotel)
-    .select()
+    .upsert(payload, { onConflict: 'hotel_id' })
+    .select('*')
     .single();
 
   if (error) {
-    console.error(`[saveHotel] Error saving "${normalizedHotel.hotel_name}" to Supabase:`, error);
+    console.error(`[saveHotel] Error upserting "${normalizedHotel.hotel_name}" to Supabase:`, error);
     return null;
   }
-  console.log(`[saveHotel] Saved new hotel: "${normalizedHotel.hotel_name}" with id ${data.hotel_id}`);
+
+  console.log(`[saveHotel] Upserted hotel: "${normalizedHotel.hotel_name}" with hotel_id ${data.hotel_id}`);
   return {
     ...normalizedHotel,
     ...data,
@@ -158,9 +142,33 @@ export const getNearbyHotels = async (req, res) => {
 // GET all hotels from our database
 export const getAllHotels = async (req, res) => {
   try {
-    const { data, error } = await supabase.from('Hotel_Master').select('*');
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { data: userBookings, error: bookingError } = await supabase
+      .from('Booking_Details')
+      .select('hotel_id')
+      .eq('user_id', userId);
+
+    if (bookingError) {
+      throw bookingError;
+    }
+
+    const userHotelIds = [...new Set((userBookings || []).map((b) => String(b.hotel_id).trim()).filter(Boolean))];
+
+    if (userHotelIds.length === 0) {
+      return res.json([]);
+    }
+
+    const { data, error } = await supabase
+      .from('Hotel_Master')
+      .select('*')
+      .in('hotel_id', userHotelIds);
+
     if (error) throw error;
-    res.json(data);
+    res.json(data || []);
   } catch (err) {
     console.error(err);
     res.status(500).send('Server error');
@@ -170,71 +178,56 @@ export const getAllHotels = async (req, res) => {
 // POST a new hotel to our database
 export const createHotel = async (req, res) => {
   const {
+    place_id,
     hotel_name,
-    booking_id,
     address,
-    price_per_night = 0,
-    contact_no = '',
     rating = 0,
   } = req.body;
 
-  if (!hotel_name || !address) {
-    return res.status(400).json({ error: 'hotel_name and address are required.' });
+  if (!place_id || !hotel_name || !address) {
+    return res.status(400).json({
+      success: false,
+      error: 'place_id, hotel_name and address are required.',
+    });
   }
 
   try {
-    const { data: existingHotel, error: existingHotelError } = await supabase
-      .from('Hotel_Master')
-      .select('*')
-      .eq('hotel_name', hotel_name)
-      .eq('address', address)
-      .single();
-
-    if (existingHotelError && existingHotelError.code !== 'PGRST116') {
-      throw existingHotelError;
-    }
-
-    if (existingHotel) {
-      const updates = {
-        price_per_night: Number(price_per_night) || 0,
-        contact_no,
-        rating: Number(rating) || 0,
-      };
-
-      if (booking_id) {
-        updates.booking_id = booking_id;
-      }
-
-      const { data, error } = await supabase
-        .from('Hotel_Master')
-        .update(updates)
-        .eq('hotel_id', existingHotel.hotel_id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return res.status(200).json(data);
-    }
+    const hotelId = String(place_id).trim();
 
     const payload = {
-      hotel_name,
-      booking_id: booking_id || null,
-      address,
-      price_per_night: Number(price_per_night) || 0,
-      contact_no,
+      hotel_id: hotelId,
+      hotel_name: String(hotel_name).trim(),
+      address: String(address).trim(),
       rating: Number(rating) || 0,
     };
 
     const { data, error } = await supabase
       .from('Hotel_Master')
-      .insert(payload)
-      .select()
+      .upsert(payload, { onConflict: 'hotel_id' })
+      .select('*')
       .single();
 
-    if (error) throw error;
-    res.status(201).json(data);
+    if (error) {
+      console.error('[createHotel] Supabase upsert error:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to save hotel.',
+        details: error.message,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Hotel saved successfully.',
+      mapped_hotel_id: hotelId,
+      hotel: data,
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).send('Server error');
+    console.error('[createHotel] Unexpected error:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error while saving hotel.',
+      details: err.message,
+    });
   }
 };

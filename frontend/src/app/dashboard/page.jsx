@@ -107,7 +107,7 @@ const Dashboard = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {hotels.map((hotel) => (
-                <div key={hotel.hotel_id} className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                <div key={hotel.place_id || hotel.hotel_id || `${hotel.hotel_name}-${hotel.address}`} className="bg-gray-800 rounded-lg p-4 border border-gray-700">
                   <h3 className="text-xl font-bold">{hotel.hotel_name}</h3>
                   <p className="text-sm text-gray-300 mt-1">{hotel.address}</p>
                   <div className="mt-3 text-sm text-gray-300 space-y-1">

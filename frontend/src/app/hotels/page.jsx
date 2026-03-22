@@ -12,6 +12,8 @@ const containerStyle = {
   height: '400px',
 };
 
+const getDestinationStorageKey = (userId) => `destination:${userId || 'guest'}`;
+
 const HotelsPage = () => {
   const { user } = useContext(AuthContext);
   const [hotels, setHotels] = useState([]);
@@ -41,7 +43,8 @@ const HotelsPage = () => {
   }, [user]);
 
   useEffect(() => {
-    const storedDestination = localStorage.getItem('destination');
+    const storageKey = getDestinationStorageKey(user?.id);
+    const storedDestination = localStorage.getItem(storageKey);
     if (storedDestination) {
       const parsedDestination = JSON.parse(storedDestination);
       setDestination(parsedDestination);
@@ -50,7 +53,7 @@ const HotelsPage = () => {
       setMapCenter(center);
       fetchNearbyHotels(center.lat, center.lng);
     }
-  }, []);
+  }, [user?.id]);
 
   const fetchNearbyHotels = async (lat, lng) => {
     setIsSearching(true);
@@ -58,7 +61,7 @@ const HotelsPage = () => {
       const response = await axios.get(`/api/hotels/nearby?lat=${lat}&lng=${lng}`);
       setHotels(response.data);
     } catch (error) {
-      console.error('Failed to fetch nearby hotels:', error);
+      console.error('Failed to fetch nearby hotels:', error.message, error.response?.data);
     } finally {
       setIsSearching(false);
     }
@@ -89,7 +92,7 @@ const HotelsPage = () => {
     setDestination(selectedDestination);
     setSearchQuery(selectedDestination.name || '');
     setMapCenter({ lat, lng });
-    localStorage.setItem('destination', JSON.stringify(selectedDestination));
+    localStorage.setItem(getDestinationStorageKey(user?.id), JSON.stringify(selectedDestination));
     fetchNearbyHotels(lat, lng);
   };
 
@@ -106,8 +109,8 @@ const HotelsPage = () => {
       return 'https://www.google.com/travel/hotels';
     }
 
-    if (hotel.google_place_id) {
-      return `https://www.google.com/maps/place/?q=place_id:${hotel.google_place_id}`;
+    if (hotel.place_id) {
+      return `https://www.google.com/maps/place/?q=place_id:${hotel.place_id}`;
     }
 
     const query = `${hotel.hotel_name || 'hotel'} ${hotel.address || ''}`.trim();
@@ -115,21 +118,27 @@ const HotelsPage = () => {
   };
 
   const saveSelectedHotel = async (hotel) => {
+    const placeId = hotel?.place_id || hotel?.google_place_id || null;
+
+    if (!placeId) {
+      console.error('saveSelectedHotel failed: place_id missing for selected hotel.', hotel);
+      return hotel;
+    }
+
     try {
       const { data } = await axios.post('/api/hotels', {
+        place_id: placeId,
         hotel_name: hotel.hotel_name,
         address: hotel.address || '',
-        price_per_night: Number(hotel.price_per_night || 0),
-        contact_no: hotel.contact_no || '',
         rating: Number(hotel.rating || 0),
       });
 
       return {
         ...hotel,
-        ...data,
+        ...(data?.hotel || {}),
       };
     } catch (error) {
-      console.error('Failed to save selected hotel:', error);
+      console.error('Failed to save selected hotel:', error.message, error.response?.data);
       return hotel;
     }
   };
@@ -167,7 +176,9 @@ const HotelsPage = () => {
   const submitBooking = async (e) => {
     e.preventDefault();
 
-    if (!selectedHotel?.hotel_id) {
+    const resolvedHotelId = selectedHotel?.hotel_id || selectedHotel?.place_id || null;
+
+    if (!resolvedHotelId) {
       setBookingStatus({ type: 'error', message: 'No hotel selected for booking.' });
       return;
     }
@@ -177,12 +188,17 @@ const HotelsPage = () => {
 
     try {
       const payload = {
-        hotel_id: selectedHotel.hotel_id,
+        user_id: user?.id,
+        destination_id: destination?.id ?? null,
+        hotel_id: resolvedHotelId,
+        hotel_name: selectedHotel.hotel_name,
+        address: selectedHotel.address,
+        rating: Number(selectedHotel.rating || 0),
         guest_name: bookingForm.guest_name,
         email: bookingForm.email,
         phone_no: bookingForm.phone_no,
-        checkin_date: bookingForm.checkin_date,
-        checkout_date: bookingForm.checkout_date,
+        check_in: bookingForm.checkin_date,
+        check_out: bookingForm.checkout_date,
         amount: bookingForm.amount,
       };
 
@@ -198,6 +214,7 @@ const HotelsPage = () => {
         window.location.href = officialUrl;
       }, 700);
     } catch (error) {
+      console.error('Booking API failed:', error.message, error.response?.data);
       const apiMessage = error?.response?.data?.error;
       setBookingStatus({
         type: 'error',
@@ -256,7 +273,7 @@ const HotelsPage = () => {
               {/* Hotel markers */}
               {hotels.map((hotel) => (
                 <Marker
-                  key={hotel.hotel_id}
+                  key={hotel.place_id || hotel.hotel_id || `${hotel.hotel_name}-${hotel.address}`}
                   position={{ lat: hotel.lat, lng: hotel.lng }}
                   title={hotel.hotel_name}
                   onClick={() => openHotelModal(hotel)}
@@ -271,7 +288,7 @@ const HotelsPage = () => {
             <p>Searching hotels near your destination...</p>
           ) : hotels.length > 0 ? (
             hotels.map((hotel) => (
-              <HotelCard key={hotel.hotel_id} hotel={hotel} onSelect={openHotelModal} />
+              <HotelCard key={hotel.place_id || hotel.hotel_id || `${hotel.hotel_name}-${hotel.address}`} hotel={hotel} onSelect={openHotelModal} />
             ))
           ) : (
             <p>No hotels found nearby.</p>

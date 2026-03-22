@@ -1,13 +1,68 @@
 import { nanoid } from 'nanoid';
 import supabase from '../config/supabase.js';
 
-const validateBookingPayload = (payload) => {
-  const requiredFields = ['hotel_id', 'guest_name', 'phone_no', 'checkin_date', 'checkout_date', 'email', 'amount'];
+const extractBearerToken = (req) => {
+  const authHeader = req.headers?.authorization || '';
+  if (!authHeader.startsWith('Bearer ')) {
+    return null;
+  }
 
-  for (const field of requiredFields) {
-    if (!payload[field]) {
-      return `${field} is required.`;
-    }
+  return authHeader.slice(7).trim() || null;
+};
+
+const resolveAuthenticatedUser = async (req) => {
+  if (req.user?.id) {
+    return req.user;
+  }
+
+  const token = extractBearerToken(req);
+  if (!token) {
+    return null;
+  }
+
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error || !data?.user) {
+    return null;
+  }
+
+  return data.user;
+};
+
+const toTrimmedString = (value) => {
+  if (value === undefined || value === null) {
+    return '';
+  }
+
+  return String(value).trim();
+};
+
+const validateBookingPayload = (payload) => {
+  if (!payload.hotel_id) {
+    return 'hotel_id is required.';
+  }
+
+  if (!payload.checkin_date) {
+    return 'checkin_date is required.';
+  }
+
+  if (!payload.checkout_date) {
+    return 'checkout_date is required.';
+  }
+
+  if (!payload.guest_name) {
+    return 'guest_name is required.';
+  }
+
+  if (!payload.phone_no) {
+    return 'phone_no is required.';
+  }
+
+  if (!payload.email) {
+    return 'email is required.';
+  }
+
+  if (payload.amount === null || payload.amount === undefined || payload.amount === '') {
+    return 'amount is required.';
   }
 
   const checkIn = new Date(payload.checkin_date);
@@ -22,100 +77,198 @@ const validateBookingPayload = (payload) => {
   }
 
   const emailPattern = /^\S+@\S+\.\S+$/;
-  if (!emailPattern.test(String(payload.email || '').trim())) {
+  if (!emailPattern.test(payload.email)) {
     return 'email must be a valid email address.';
   }
 
-  const amount = Number(payload.amount);
-  if (!Number.isFinite(amount) || amount < 0) {
+  if (!Number.isFinite(payload.amount) || payload.amount < 0) {
     return 'amount must be a valid non-negative number.';
   }
 
   return null;
 };
 
-const isMissingTableError = (error) => {
-  const message = `${error?.message || ''} ${error?.details || ''}`.toLowerCase();
-  return message.includes('could not find the table') || message.includes('does not exist');
+const isForeignKeyError = (error) => {
+  const code = error?.code;
+  return code === '23503';
 };
 
-export const createBooking = async (req, res) => {
-  const {
-    hotel_id,
-    guest_name,
-    phone_no,
-    checkin_date,
-    checkout_date,
-    email,
-    amount,
-  } = req.body;
+const normalizeBookingPayload = (req) => {
+  const body = req.body || {};
+  const mappedHotelId = body.hotel_id || body.place_id || null;
+  const checkinDate = body.check_in || body.checkin_date || null;
+  const checkoutDate = body.check_out || body.checkout_date || null;
 
-  const payload = {
-    hotel_id,
-    guest_name,
-    phone_no,
-    checkin_date,
-    checkout_date,
-    email,
-    amount: Number(amount),
+  return {
+    hotel_id: mappedHotelId ? toTrimmedString(mappedHotelId) : '',
+    user_id: null,
+    checkin_date: checkinDate ? toTrimmedString(checkinDate) : '',
+    checkout_date: checkoutDate ? toTrimmedString(checkoutDate) : '',
+    guest_name: toTrimmedString(body.guest_name),
+    phone_no: toTrimmedString(body.phone_no),
+    email: toTrimmedString(body.email),
+    amount: Number(body.amount),
+    hotel_name: body.hotel_name || null,
+    address: body.address || null,
+    rating: Number(body.rating || 0),
   };
+};
 
-  const validationError = validateBookingPayload(payload);
-  if (validationError) {
-    return res.status(400).json({ error: validationError });
+const ensureHotelExists = async (payload) => {
+  const hotelId = String(payload.hotel_id || '').trim();
+
+  const { data: existingHotel, error: selectError } = await supabase
+    .from('Hotel_Master')
+    .select('hotel_id')
+    .eq('hotel_id', hotelId)
+    .maybeSingle();
+
+  if (selectError) {
+    console.error('[ensureHotelExists] Failed to check hotel:', selectError);
+    throw selectError;
   }
 
-  const booking_id = `bk_${nanoid(10)}`;
+  if (existingHotel) {
+    return;
+  }
 
+  if (!payload.hotel_name || !payload.address) {
+    throw new Error('Hotel does not exist yet. Send hotel_name and address to create it before booking.');
+  }
+
+  const hotelPayload = {
+    hotel_id: hotelId,
+    hotel_name: String(payload.hotel_name).trim(),
+    address: String(payload.address).trim(),
+    rating: Number(payload.rating || 0),
+  };
+
+  const { error: upsertHotelError } = await supabase
+    .from('Hotel_Master')
+    .upsert(hotelPayload, { onConflict: 'hotel_id' });
+
+  if (upsertHotelError) {
+    console.error('[ensureHotelExists] Failed to upsert hotel:', upsertHotelError);
+    throw upsertHotelError;
+  }
+};
+
+export const getBookings = async (req, res) => {
   try {
-    const candidateTables = ['Booking_Details', 'booking_details'];
-    let data = null;
-    const errors = [];
-
-    for (const tableName of candidateTables) {
-      const result = await supabase
-        .from(tableName)
-        .insert([{ booking_id, ...payload }])
-        .select()
-        .single();
-
-      if (!result.error) {
-        data = result.data;
-        break;
-      }
-
-      errors.push({ tableName, error: result.error });
-      console.error(`[createBooking] Insert failed on table ${tableName}:`, result.error);
-    }
-
-    if (!data && errors.length > 0) {
-      const firstNonMissingTableError = errors.find((entry) => !isMissingTableError(entry.error));
-      if (firstNonMissingTableError) {
-        throw firstNonMissingTableError.error;
-      }
-
-      return res.status(500).json({
-        error:
-          'Failed to save booking details. Booking table is missing in Supabase. Create table Booking_Details in public schema and retry.',
+    const user = await resolveAuthenticatedUser(req);
+    if (!user?.id) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized',
       });
     }
 
-    const { error: hotelUpdateError } = await supabase
-      .from('Hotel_Master')
-      .update({ booking_id })
-      .eq('hotel_id', hotel_id);
+    const { data, error } = await supabase
+      .from('Booking_Details')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('checkin_date', { ascending: false });
 
-    if (hotelUpdateError) {
-      console.error('[createBooking] Failed to update Hotel_Master booking_id:', hotelUpdateError);
+    if (error) {
+      console.error('[getBookings] Failed to fetch bookings:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to fetch bookings.',
+        details: error.message,
+      });
     }
 
-    return res.status(201).json({
+    return res.status(200).json({
+      success: true,
+      bookings: data || [],
+    });
+  } catch (err) {
+    console.error('[getBookings] Unexpected error:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error while fetching bookings.',
+      details: err.message,
+    });
+  }
+};
+
+export const createBooking = async (req, res) => {
+  try {
+    const user = await resolveAuthenticatedUser(req);
+    if (!user?.id) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized',
+      });
+    }
+
+    const payload = normalizeBookingPayload(req);
+    payload.user_id = user.id;
+
+    if (!payload.email) {
+      payload.email = toTrimmedString(user.email);
+    }
+
+    const validationError = validateBookingPayload(payload);
+    if (validationError) {
+      return res.status(400).json({
+        success: false,
+        error: validationError,
+      });
+    }
+
+    const booking_id = `bk_${nanoid(10)}`;
+
+    await ensureHotelExists(payload);
+
+    const insertPayload = {
+      booking_id,
+      user_id: user.id,
+      hotel_id: payload.hotel_id,
+      checkin_date: payload.checkin_date,
+      checkout_date: payload.checkout_date,
+      guest_name: payload.guest_name,
+      phone_no: payload.phone_no,
+      email: payload.email,
+      amount: payload.amount,
+    };
+
+    const { data, error } = await supabase
+      .from('Booking_Details')
+      .insert([insertPayload])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[createBooking] Insert booking error:', error);
+
+      if (isForeignKeyError(error)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Foreign key validation failed. Verify user_id, hotel_id, and destination_id.',
+          details: error.details || error.message,
+        });
+      }
+
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to save booking details.',
+        details: error.details || error.message,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
       message: 'Booking saved successfully.',
       booking: data,
     });
   } catch (err) {
     console.error('[createBooking] Error saving booking:', err);
     const details = err?.message || err?.details || 'Unknown database error.';
-    return res.status(500).json({ error: `Failed to save booking details. ${details}` });
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to save booking details.',
+      details,
+    });
   }
 };
