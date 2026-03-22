@@ -148,7 +148,7 @@ export const getAllHotels = async (req, res) => {
     }
 
     const { data: userBookings, error: bookingError } = await supabase
-      .from('Booking_Details')
+      .from('booking_details')
       .select('hotel_id')
       .eq('user_id', userId);
 

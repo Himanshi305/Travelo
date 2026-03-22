@@ -2,57 +2,16 @@
 
 import { ArrowRight } from "lucide-react";
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Marquee } from "@/components/ui/marquee";
 
-const teamAvatars = [
-  {
-    initials: "JD",
-    src: "https://res.cloudinary.com/doonkheo8/image/upload/v1770279333/a1.jpg",
-  },
-  {
-    initials: "HJ",
-    src: "https://res.cloudinary.com/doonkheo8/image/upload/v1770279333/a2.jpg",
-  },
-  {
-    initials: "PI",
-    src: "https://res.cloudinary.com/doonkheo8/image/upload/v1770279333/a3.jpg",
-  },
-  {
-    initials: "KD",
-    src: "https://res.cloudinary.com/doonkheo8/image/upload/v1770279333/a4.jpg",
-  },
-  {
-    initials: "LD",
-    src: "https://res.cloudinary.com/doonkheo8/image/upload/v1770279333/a5.jpg",
-  },
-];
+
 
 const stats = [
   { emoji: "🚀", label: "IN CLIENT REVENUE GENERATED", value: "$5M+" },
   { emoji: "📈", label: "BUSINESSES LAUNCHED", value: "200+" },
   { emoji: "💰", label: "SAVED IN OPERATIONAL COSTS", value: "$500K+" },
 ];
-
-function AvatarStack() {
-  return (
-    <div className="flex -space-x-3">
-      {teamAvatars.map((member, i) => (
-        <Avatar
-          className="size-13 border-2 border-primary bg-neutral-800"
-          key={member.initials}
-          style={{ zIndex: teamAvatars.length - i }}
-        >
-          <AvatarImage alt={`Team member ${i + 1}`} src={member.src} />
-          <AvatarFallback className="bg-neutral-700 text-white text-xs">
-            {member.initials}
-          </AvatarFallback>
-        </Avatar>
-      ))}
-    </div>
-  );
-}
 
 function StatsMarquee() {
   return (
@@ -94,7 +53,6 @@ export default function Hero() {
 
       <div className="relative z-10 w-full max-w-4xl px-4 text-white sm:px-8 lg:px-16">
         <div className="space-y-4">
-          <AvatarStack />
           <StatsMarquee />
         </div>
       </div>

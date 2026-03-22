@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE users (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
@@ -26,9 +28,9 @@ CREATE TABLE Hotel_Master (
   rating NUMERIC(2, 1) DEFAULT 0
 );
 
-CREATE TABLE Booking_Details (
-  booking_id TEXT PRIMARY KEY,
-  user_id UUID NOT NULL REFERENCES auth.users(id),
+CREATE TABLE booking_details (
+  booking_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   hotel_id TEXT NOT NULL REFERENCES Hotel_Master(hotel_id),
   checkin_date DATE NOT NULL,
   checkout_date DATE NOT NULL,
@@ -39,22 +41,42 @@ CREATE TABLE Booking_Details (
 );
 
 -- ===============================
+-- SQL Migration: Convert existing booking_id to UUID
+-- ===============================
+-- Use this only if booking_details already exists with TEXT booking_id values (for example bk_xxxxx):
+--
+-- ALTER TABLE booking_details ADD COLUMN IF NOT EXISTS booking_id_uuid UUID DEFAULT gen_random_uuid();
+--
+-- UPDATE booking_details
+-- SET booking_id_uuid = CASE
+--   WHEN booking_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+--     THEN booking_id::UUID
+--   ELSE gen_random_uuid()
+-- END;
+--
+-- ALTER TABLE booking_details DROP CONSTRAINT IF EXISTS booking_details_pkey;
+-- ALTER TABLE booking_details DROP COLUMN booking_id;
+-- ALTER TABLE booking_details RENAME COLUMN booking_id_uuid TO booking_id;
+-- ALTER TABLE booking_details ALTER COLUMN booking_id SET DEFAULT gen_random_uuid();
+-- ALTER TABLE booking_details ADD CONSTRAINT booking_details_pkey PRIMARY KEY (booking_id);
+
+-- ===============================
 -- SQL Migration: Fix hotel_id type to support string IDs
 -- ===============================
 -- Run this on Supabase to convert existing BIGINT to TEXT:
 --
--- ALTER TABLE Booking_Details DROP CONSTRAINT booking_details_hotel_fk;
--- ALTER TABLE Booking_Details ALTER COLUMN hotel_id TYPE TEXT USING hotel_id::TEXT;
--- ALTER TABLE Booking_Details ADD CONSTRAINT booking_details_hotel_fk FOREIGN KEY (hotel_id) REFERENCES Hotel_Master(hotel_id);
--- ALTER TABLE Booking_Details ADD COLUMN IF NOT EXISTS user_id UUID;
+-- ALTER TABLE booking_details DROP CONSTRAINT booking_details_hotel_fk;
+-- ALTER TABLE booking_details ALTER COLUMN hotel_id TYPE TEXT USING hotel_id::TEXT;
+-- ALTER TABLE booking_details ADD CONSTRAINT booking_details_hotel_fk FOREIGN KEY (hotel_id) REFERENCES Hotel_Master(hotel_id);
+-- ALTER TABLE booking_details ADD COLUMN IF NOT EXISTS user_id UUID;
 -- Backfill user_id for existing rows before setting NOT NULL, for example:
--- UPDATE Booking_Details bd
+-- UPDATE booking_details bd
 -- SET user_id = au.id
 -- FROM auth.users au
 -- WHERE bd.user_id IS NULL
 --   AND lower(bd.email) = lower(au.email);
--- ALTER TABLE Booking_Details ALTER COLUMN user_id SET NOT NULL;
--- ALTER TABLE Booking_Details ADD CONSTRAINT booking_details_user_fk FOREIGN KEY (user_id) REFERENCES auth.users(id);
+-- ALTER TABLE booking_details ALTER COLUMN user_id SET NOT NULL;
+-- ALTER TABLE booking_details ADD CONSTRAINT booking_details_user_fk FOREIGN KEY (user_id) REFERENCES auth.users(id);
 
 -- ===============================
 -- SQL Migration: Isolate destinations by account (user_id)

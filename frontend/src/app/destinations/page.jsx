@@ -41,7 +41,7 @@ const DestinationsPage = () => {
       localStorage.setItem(
         getDestinationStorageKey(user?.id),
         JSON.stringify({
-          id: data?.id ?? null,
+          id: data?.destination_id ?? data?.id ?? null,
           name,
           address,
           lat,
@@ -81,9 +81,9 @@ const DestinationsPage = () => {
 
         {/* Display destinations */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {destinations.map((destination) => (
+          {destinations.map((destination, index) => (
             <button
-              key={destination.id}
+              key={destination.destination_id ?? destination.id ?? `${destination.destination_name}-${index}`}
               type="button"
               onClick={() => setSelectedDestinationName(destination.destination_name)}
               className="bg-gray-800 rounded-lg p-4 text-left hover:bg-gray-700 transition-colors"

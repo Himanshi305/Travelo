@@ -12,7 +12,7 @@ export const getDestinations = async (req, res) => {
       .from("Destination_Master")
       .select("*")
       .eq("user_id", userId)
-      .order("created_at", { ascending: false });
+      .order("destination_id", { ascending: false });
 
     if (error) throw error;
 
@@ -34,7 +34,7 @@ export const getDestination = async (req, res) => {
     const { data, error } = await supabase
       .from("Destination_Master")
       .select("*")
-      .eq("id", req.params.id)
+      .eq("destination_id", req.params.id)
       .eq("user_id", userId)
       .single();
 
@@ -96,7 +96,7 @@ export const updateDestination = async (req, res) => {
       .update({
         destination_name: String(destination_name).trim(),
       })
-      .eq("id", req.params.id)
+      .eq("destination_id", req.params.id)
       .eq("user_id", userId)
       .select();
 
@@ -122,7 +122,7 @@ export const deleteDestination = async (req, res) => {
     const { error } = await supabase
       .from("Destination_Master")
       .delete()
-      .eq("id", req.params.id)
+      .eq("destination_id", req.params.id)
       .eq("user_id", userId);
 
     if (error) throw error;

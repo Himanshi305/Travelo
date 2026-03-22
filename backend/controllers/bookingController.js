@@ -1,4 +1,3 @@
-import { nanoid } from 'nanoid';
 import supabase from '../config/supabase.js';
 
 const extractBearerToken = (req) => {
@@ -164,7 +163,7 @@ export const getBookings = async (req, res) => {
     }
 
     const { data, error } = await supabase
-      .from('Booking_Details')
+      .from('booking_details')
       .select('*')
       .eq('user_id', user.id)
       .order('checkin_date', { ascending: false });
@@ -217,12 +216,9 @@ export const createBooking = async (req, res) => {
       });
     }
 
-    const booking_id = `bk_${nanoid(10)}`;
-
     await ensureHotelExists(payload);
 
     const insertPayload = {
-      booking_id,
       user_id: user.id,
       hotel_id: payload.hotel_id,
       checkin_date: payload.checkin_date,
@@ -234,7 +230,7 @@ export const createBooking = async (req, res) => {
     };
 
     const { data, error } = await supabase
-      .from('Booking_Details')
+      .from('booking_details')
       .insert([insertPayload])
       .select()
       .single();
