@@ -56,6 +56,7 @@ const HotelCard = ({ hotel, onSelect }) => {
             <span className="text-sm text-gray-400"> / night</span>
           </p>
           {hotel.contact_no && <p className="text-sm text-gray-400 mt-1">Contact: {hotel.contact_no}</p>}
+          <p className="text-xs text-amber-300 mt-2">Click card to view hotel details</p>
         </div>
       </div>
     </button>

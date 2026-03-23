@@ -40,6 +40,19 @@ CREATE TABLE booking_details (
   amount DECIMAL(10, 2) NOT NULL
 );
 
+CREATE TABLE Review_Master (
+  review_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  hotel_id TEXT NOT NULL REFERENCES Hotel_Master(hotel_id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_email TEXT,
+  comment TEXT NOT NULL,
+  star SMALLINT NOT NULL CHECK (star BETWEEN 1 AND 5),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX review_master_hotel_id_idx ON Review_Master(hotel_id);
+CREATE INDEX review_master_user_id_idx ON Review_Master(user_id);
+
 -- ===============================
 -- SQL Migration: Convert existing booking_id to UUID
 -- ===============================

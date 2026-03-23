@@ -117,6 +117,11 @@ const HotelsPage = () => {
     return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
   };
 
+  const resolveHotelId = (hotel) => {
+    const rawId = hotel?.hotel_id || hotel?.place_id || hotel?.google_place_id || null;
+    return rawId ? String(rawId).trim() : null;
+  };
+
   const saveSelectedHotel = async (hotel) => {
     const placeId = hotel?.place_id || hotel?.google_place_id || null;
 
@@ -145,6 +150,8 @@ const HotelsPage = () => {
 
   const openHotelModal = async (hotel) => {
     const persistedHotel = await saveSelectedHotel(hotel);
+    const resolvedHotelId = resolveHotelId(persistedHotel);
+
     setSelectedHotel(persistedHotel);
     setShowBookingForm(false);
     setBookingStatus({ type: '', message: '' });
@@ -224,6 +231,7 @@ const HotelsPage = () => {
       setIsSubmittingBooking(false);
     }
   };
+
 
   return (
     <div className="bg-gray-900 text-white min-h-screen">

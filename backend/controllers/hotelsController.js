@@ -231,3 +231,106 @@ export const createHotel = async (req, res) => {
     });
   }
 };
+
+// GET reviews for a specific hotel
+export const getHotelReviews = async (req, res) => {
+  const { hotelId } = req.params;
+
+  if (!hotelId) {
+    return res.status(400).json({ error: 'hotelId is required.' });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('Review_Master')
+      .select('review_id, hotel_id, user_id, user_email, comment, star, created_at')
+      .eq('hotel_id', String(hotelId).trim())
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[getHotelReviews] Supabase query error:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to fetch hotel reviews.',
+        details: error.message,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      reviews: data || [],
+    });
+  } catch (err) {
+    console.error('[getHotelReviews] Unexpected error:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error while fetching reviews.',
+      details: err.message,
+    });
+  }
+};
+
+// POST a review (comment + star) for a specific hotel
+export const createHotelReview = async (req, res) => {
+  const userId = req.user?.id;
+  const userEmail = req.user?.email || null;
+  const { hotelId } = req.params;
+  const { comment, star } = req.body;
+
+  if (!userId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  if (!hotelId) {
+    return res.status(400).json({ success: false, error: 'hotelId is required.' });
+  }
+
+  const sanitizedComment = String(comment || '').trim();
+  const numericStar = Number(star);
+
+  if (!sanitizedComment) {
+    return res.status(400).json({ success: false, error: 'comment is required.' });
+  }
+
+  if (!Number.isFinite(numericStar) || numericStar < 1 || numericStar > 5) {
+    return res.status(400).json({ success: false, error: 'star must be a number between 1 and 5.' });
+  }
+
+  try {
+    const payload = {
+      hotel_id: String(hotelId).trim(),
+      user_id: userId,
+      user_email: userEmail,
+      comment: sanitizedComment,
+      star: Math.round(numericStar),
+    };
+
+    const { data, error } = await supabase
+      .from('Review_Master')
+      .insert(payload)
+      .select('review_id, hotel_id, user_id, user_email, comment, star, created_at')
+      .single();
+
+    if (error) {
+      console.error('[createHotelReview] Supabase insert error:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to save review.',
+        details: error.message,
+      });
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: 'Review submitted successfully.',
+      review: data,
+    });
+  } catch (err) {
+    console.error('[createHotelReview] Unexpected error:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error while submitting review.',
+      details: err.message,
+    });
+  }
+};
