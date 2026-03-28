@@ -94,6 +94,13 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (name, email, password, role) => {
     try {
+      const allowedRoles = ['user', 'admin'];
+      const normalizedRole =
+        typeof role === 'string' ? role.trim().toLowerCase() : 'user';
+      const safeRole = allowedRoles.includes(normalizedRole)
+        ? normalizedRole
+        : 'user';
+
       // Prevent previous logged-in user data from bleeding into a new registration flow.
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
@@ -106,7 +113,7 @@ export const AuthProvider = ({ children }) => {
         options: {
           data: {
             name,
-            role,
+            role: safeRole,
           },
         },
       });

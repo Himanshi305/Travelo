@@ -9,10 +9,22 @@ const normalizeGoogleHotel = (hotelData) => ({
   rating: Number(hotelData.rating || 0),
   price_per_night: 0,
   contact_no: '',
+  hotel_url: '',
+  hotel_details: '',
   photo_reference: hotelData.photos?.[0]?.photo_reference || null,
   lat: hotelData.geometry?.location?.lat || null,
   lng: hotelData.geometry?.location?.lng || null,
 });
+
+const makeAdminHotelId = (hotelName) => {
+  const base = String(hotelName || 'hotel')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40) || 'hotel';
+
+  return `admin_${Date.now()}_${base}`;
+};
 
 const saveHotel = async (hotelData) => {
   const normalizedHotel = normalizeGoogleHotel(hotelData);
@@ -330,6 +342,102 @@ export const createHotelReview = async (req, res) => {
     return res.status(500).json({
       success: false,
       error: 'Server error while submitting review.',
+      details: err.message,
+    });
+  }
+};
+
+export const getAdminHotels = async (req, res) => {
+  const userId = req.user?.id;
+  if (!userId) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('Hotel_Master')
+      .select('*')
+      .eq('created_by', userId)
+      .order('hotel_id', { ascending: false });
+
+    if (error) {
+      console.error('[getAdminHotels] Supabase query error:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to fetch admin hotels.',
+        details: error.message,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      hotels: data || [],
+    });
+  } catch (err) {
+    console.error('[getAdminHotels] Unexpected error:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error while fetching admin hotels.',
+      details: err.message,
+    });
+  }
+};
+
+export const createAdminHotel = async (req, res) => {
+  const userId = req.user?.id;
+
+  if (!userId) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' });
+  }
+
+  const { hotel_name, hotel_url = '', hotel_details = '' } = req.body;
+  const trimmedName = String(hotel_name || '').trim();
+  const trimmedUrl = String(hotel_url || '').trim();
+  const trimmedDetails = String(hotel_details || '').trim();
+
+  if (!trimmedName) {
+    return res.status(400).json({
+      success: false,
+      error: 'hotel_name is required.',
+    });
+  }
+
+  const payload = {
+    hotel_id: makeAdminHotelId(trimmedName),
+    hotel_name: trimmedName,
+    address: 'Not provided',
+    rating: 0,
+    hotel_url: trimmedUrl,
+    hotel_details: trimmedDetails,
+    created_by: userId,
+  };
+
+  try {
+    const { data, error } = await supabase
+      .from('Hotel_Master')
+      .insert(payload)
+      .select('*')
+      .single();
+
+    if (error) {
+      console.error('[createAdminHotel] Supabase insert error:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to save admin hotel.',
+        details: error.message,
+      });
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: 'Hotel added successfully.',
+      hotel: data,
+    });
+  } catch (err) {
+    console.error('[createAdminHotel] Unexpected error:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error while saving admin hotel.',
       details: err.message,
     });
   }

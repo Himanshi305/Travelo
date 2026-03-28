@@ -37,11 +37,3 @@ export const isAdmin = (req, res, next) => {
     res.status(403).json({ msg: 'Admin access required' });
   }
 };
-
-export const isVendor = (req, res, next) => {
-  if (req.user && req.user.user_metadata?.role === 'vendor') {
-    next();
-  } else {
-    res.status(403).json({ msg: 'Vendor access required' });
-  }
-};

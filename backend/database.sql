@@ -5,7 +5,7 @@ CREATE TABLE users (
   name VARCHAR(255) NOT NULL,
   email VARCHAR(255) NOT NULL UNIQUE,
   password VARCHAR(255) NOT NULL,
-  role ENUM('user', 'admin', 'vendor') NOT NULL DEFAULT 'user',
+  role ENUM('user', 'admin') NOT NULL DEFAULT 'user',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -25,7 +25,10 @@ CREATE TABLE Hotel_Master (
   address VARCHAR(500) NOT NULL,
   price_per_night NUMERIC(10, 2) DEFAULT 0,
   contact_no VARCHAR(30) DEFAULT '',
-  rating NUMERIC(2, 1) DEFAULT 0
+  rating NUMERIC(2, 1) DEFAULT 0,
+  hotel_url TEXT DEFAULT '',
+  hotel_details TEXT DEFAULT '',
+  created_by UUID REFERENCES auth.users(id)
 );
 
 CREATE TABLE booking_details (
@@ -90,6 +93,15 @@ CREATE INDEX review_master_user_id_idx ON Review_Master(user_id);
 --   AND lower(bd.email) = lower(au.email);
 -- ALTER TABLE booking_details ALTER COLUMN user_id SET NOT NULL;
 -- ALTER TABLE booking_details ADD CONSTRAINT booking_details_user_fk FOREIGN KEY (user_id) REFERENCES auth.users(id);
+
+-- ===============================
+-- SQL Migration: Add admin hotel metadata
+-- ===============================
+-- Run this on Supabase if Hotel_Master already exists:
+--
+-- ALTER TABLE Hotel_Master ADD COLUMN IF NOT EXISTS hotel_url TEXT DEFAULT '';
+-- ALTER TABLE Hotel_Master ADD COLUMN IF NOT EXISTS hotel_details TEXT DEFAULT '';
+-- ALTER TABLE Hotel_Master ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES auth.users(id);
 
 -- ===============================
 -- SQL Migration: Isolate destinations by account (user_id)

@@ -78,7 +78,6 @@ const Register = () => {
               className="w-full px-4 py-2 mt-2 text-gray-900 bg-white rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="user">User</option>
-              <option value="vendor">Vendor</option>
               <option value="admin">Admin</option>
             </select>
           </div>

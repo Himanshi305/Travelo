@@ -4,10 +4,16 @@ import jwt from 'jsonwebtoken';
 
 export const register = async (req, res) => {
   const { name, email, password, role } = req.body;
+  const allowedRoles = ['user', 'admin'];
+  const normalizedRole = typeof role === 'string' ? role.trim().toLowerCase() : 'user';
 
   try {
+    if (!allowedRoles.includes(normalizedRole)) {
+      return res.status(400).send('Invalid role. Only user and admin are allowed.');
+    }
+
     const hash = await bcrypt.hash(password, 10);
-    await User.create(name, email, hash, role || 'user');
+    await User.create(name, email, hash, normalizedRole);
     res.status(201).send('User created');
   } catch (error) {
     console.error(error);

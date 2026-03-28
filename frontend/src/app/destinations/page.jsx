@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 import { useContext } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from '../../services/axios';
-import RouteMap from '../../components/RouteMap';
 import AuthContext from '../../context/AuthContext';
 
 const getDestinationStorageKey = (userId) => `destination:${userId || 'guest'}`;
@@ -11,7 +10,7 @@ const getDestinationStorageKey = (userId) => `destination:${userId || 'guest'}`;
 const DestinationsPage = () => {
   const { user } = useContext(AuthContext);
   const [destinations, setDestinations] = useState([]);
-  const [selectedDestinationName, setSelectedDestinationName] = useState('');
+  const [newDestinationName, setNewDestinationName] = useState('');
   const [saving, setSaving] = useState(false);
   const router = useRouter();
 
@@ -30,26 +29,37 @@ const DestinationsPage = () => {
     }
   };
 
-  const handlePlaceSelect = async ({ name, address, lat, lng }) => {
+  const saveAndGoToHotels = (destination) => {
+    localStorage.setItem(
+      getDestinationStorageKey(user?.id),
+      JSON.stringify({
+        id: destination?.destination_id ?? destination?.id ?? null,
+        name: destination?.destination_name || '',
+        address: '',
+        lat: null,
+        lng: null,
+      })
+    );
+
+    router.push('/hotels');
+  };
+
+  const handleCreateDestination = async (e) => {
+    e.preventDefault();
+    const destinationName = (newDestinationName || '').trim();
+
+    if (!destinationName) {
+      return;
+    }
+
     setSaving(true);
     try {
       const { data } = await axios.post('/api/destinations', {
-        destination_name: name,
+        destination_name: destinationName,
       });
       setDestinations((prev) => [...prev, data]);
-
-      localStorage.setItem(
-        getDestinationStorageKey(user?.id),
-        JSON.stringify({
-          id: data?.destination_id ?? data?.id ?? null,
-          name,
-          address,
-          lat,
-          lng,
-        })
-      );
-
-      router.push('/hotels');
+      setNewDestinationName('');
+      saveAndGoToHotels(data);
     } catch (error) {
       console.error('Failed to save destination:', error);
     } finally {
@@ -74,8 +84,24 @@ const DestinationsPage = () => {
         {/* Search and save destination */}
         <div className="mb-8 bg-gray-800/50 backdrop-blur-sm p-6 rounded-lg">
           <h2 className="text-3xl font-bold mb-4">Add a New Destination</h2>
-          <p className="text-gray-300 mb-4">Search for a place on the map — it will be saved automatically when selected.</p>
-          <RouteMap onPlaceSelect={handlePlaceSelect} selectedDestinationName={selectedDestinationName} />
+          <p className="text-gray-300 mb-4">Enter destination name and continue to hotels page.</p>
+          <form onSubmit={handleCreateDestination} className="flex flex-col sm:flex-row gap-3">
+            <input
+              type="text"
+              value={newDestinationName}
+              onChange={(e) => setNewDestinationName(e.target.value)}
+              placeholder="Type destination name"
+              className="w-full rounded-md border border-gray-600 bg-gray-700 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-md bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-70"
+            >
+              {saving ? 'Saving...' : 'Save & Continue'}
+            </button>
+          </form>
           {saving && <p className="mt-2 text-blue-400">Saving destination...</p>}
         </div>
 
@@ -85,11 +111,11 @@ const DestinationsPage = () => {
             <button
               key={destination.destination_id ?? destination.id ?? `${destination.destination_name}-${index}`}
               type="button"
-              onClick={() => setSelectedDestinationName(destination.destination_name)}
+              onClick={() => saveAndGoToHotels(destination)}
               className="bg-gray-800 rounded-lg p-4 text-left hover:bg-gray-700 transition-colors"
             >
               <h3 className="text-xl font-bold">{destination.destination_name}</h3>
-              <p className="text-xs text-blue-300 mt-3">Click to show route on map</p>
+              <p className="text-xs text-blue-300 mt-3">Click to continue to hotels</p>
             </button>
           ))}
         </div>
