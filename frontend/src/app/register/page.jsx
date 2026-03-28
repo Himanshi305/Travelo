@@ -16,17 +16,18 @@ const Register = () => {
   };
 
   return (
-    <div className="relative flex h-screen w-full flex-col items-center justify-center">
+    <div className="relative flex min-h-screen w-full flex-col items-center justify-center overflow-hidden px-4 pt-28 pb-10 sm:px-8">
       <div
         className="absolute inset-0 bg-center bg-cover"
         style={{
           backgroundImage:
-            "url(https://images.unsplash.com/photo-1541746972996-4e0b0f43e02a)",
+            "url('https://res.cloudinary.com/dwuljx2zv/image/upload/v1774700770/Complete_Guide_To_Backpacking_In_Arunachal_Pradesh_-_Lost_With_Purpose_ioqn7q.jpg')",
+          filter: 'blur(4px)',
         }}
       >
         <div className="absolute inset-0 bg-black/60" />
       </div>
-      <div className="relative z-10 w-full max-w-md p-8 space-y-6 bg-white/10 rounded-lg shadow-lg backdrop-blur-sm">
+      <div className="relative z-10 w-full max-w-md space-y-6 rounded-2xl border border-white/20 bg-white/10 p-8 shadow-lg backdrop-blur-md">
         <h2 className="text-3xl font-bold text-center text-white">Register</h2>
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
@@ -39,7 +40,7 @@ const Register = () => {
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
-              className="w-full px-4 py-2 mt-2 text-gray-900 bg-white rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+              className="mt-2 w-full rounded-md border border-white/20 bg-black/25 px-4 py-2 text-white placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
           <div>
@@ -52,7 +53,7 @@ const Register = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-4 py-2 mt-2 text-gray-900 bg-white rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+              className="mt-2 w-full rounded-md border border-white/20 bg-black/25 px-4 py-2 text-white placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
           <div>
@@ -65,7 +66,7 @@ const Register = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full px-4 py-2 mt-2 text-gray-900 bg-white rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+              className="mt-2 w-full rounded-md border border-white/20 bg-black/25 px-4 py-2 text-white placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
           <div>
@@ -75,7 +76,7 @@ const Register = () => {
             <select
               value={role}
               onChange={(e) => setRole(e.target.value)}
-              className="w-full px-4 py-2 mt-2 text-gray-900 bg-white rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+              className="mt-2 w-full rounded-md border border-white/20 bg-black/25 px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="user">User</option>
               <option value="admin">Admin</option>

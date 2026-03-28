@@ -21,10 +21,10 @@ function StatsMarquee() {
       pauseOnHover
       repeat={4}
     >
-      {stats.map((stat) => (
+      {stats.map((stat, index) => (
         <div
           className="flex items-center gap-3 whitespace-nowrap"
-          key={stat.label}
+          key={`${index}-${stat.label || stat.value || 'stat'}`}
         >
           <span className="font-bold font-mono text-primary text-sm tracking-wide">
             {stat.value}

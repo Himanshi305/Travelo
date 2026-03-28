@@ -7,40 +7,43 @@ import AuthContext from '../context/AuthContext';
 const Navbar = () => {
   const { user, logout } = useContext(AuthContext);
 
+  const linkClass =
+    'rounded-full px-3 py-1.5 text-sm font-medium text-white/85 transition hover:bg-white/15 hover:text-white';
+
   return (
-    <nav className="fixed top-0 left-0 w-full z-20 bg-transparent text-white">
-      <div className="container mx-auto flex justify-between items-center p-4">
+    <nav className="fixed top-0 left-0 z-30 w-full px-4 pt-4 text-white sm:px-8">
+      <div className="mx-auto flex w-full max-w-7xl items-center justify-between rounded-2xl border border-white/20 bg-black/35 px-4 py-3 backdrop-blur-md">
         <div>
-          <Link href="/" className="text-2xl font-bold hover:text-primary">
+          <Link href="/" className="text-xl font-bold tracking-wide text-white hover:text-primary sm:text-2xl">
             TravelCo
           </Link>
         </div>
-        <ul className="flex items-center">
+        <ul className="flex items-center gap-1 sm:gap-2">
           {user ? (
             <>
-              <li className="ml-4">
-                <Link href="/dashboard" className="hover:text-primary">Dashboard</Link>
+              <li>
+                <Link href="/dashboard" className={linkClass}>Dashboard</Link>
               </li>
-              <li className="ml-4">
-                <Link href="/destinations" className="hover:text-primary">Destinations</Link>
+              <li>
+                <Link href="/destinations" className={linkClass}>Destinations</Link>
               </li>
-              <li className="ml-4">
-                <Link href="/hotels" className="hover:text-primary">Hotels</Link>
+              <li>
+                <Link href="/hotels" className={linkClass}>Hotels</Link>
               </li>
-              <li className="ml-4">
-                <button onClick={logout} className="hover:text-primary">Logout</button>
+              <li>
+                <button onClick={logout} className={linkClass}>Logout</button>
               </li>
             </>
           ) : (
             <>
-              <li className="ml-4">
-                <Link href="/" className="hover:text-primary">Home</Link>
+              <li>
+                <Link href="/" className={linkClass}>Home</Link>
               </li>
-              <li className="ml-4">
-                <Link href="/login" className="hover:text-primary">Login</Link>
+              <li>
+                <Link href="/login" className={linkClass}>Login</Link>
               </li>
-              <li className="ml-4">
-                <Link href="/register" className="hover:text-primary">Register</Link>
+              <li>
+                <Link href="/register" className={linkClass}>Register</Link>
               </li>
             </>
           )}
