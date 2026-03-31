@@ -26,6 +26,65 @@ const makeAdminHotelId = (hotelName) => {
   return `admin_${Date.now()}_${base}`;
 };
 
+const isMissingCreatedByColumnError = (error) => (
+  error?.code === 'PGRST204' && String(error?.message || '').includes('created_by')
+);
+
+const isSchemaMismatchError = (error) => {
+  const code = String(error?.code || '');
+  const message = String(error?.message || '').toLowerCase();
+
+  return (
+    code === 'PGRST204'
+    || code === '42703'
+    || code === '42883'
+    || message.includes('schema cache')
+    || message.includes('column')
+    || message.includes('operator does not exist')
+  );
+};
+
+const isMissingReviewReplyTableError = (error) => {
+  const code = String(error?.code || '');
+  const message = String(error?.message || '').toLowerCase();
+
+  return code === '42P01' || message.includes('review_reply');
+};
+
+const fetchReviewRepliesMap = async (reviewIds) => {
+  if (!Array.isArray(reviewIds) || reviewIds.length === 0) {
+    return {};
+  }
+
+  const { data, error } = await supabase
+    .from('review_reply')
+    .select('reply_id, review_id, hotel_id, admin_user_id, reply_text, created_at')
+    .in('review_id', reviewIds)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    if (isMissingReviewReplyTableError(error)) {
+      return {};
+    }
+
+    throw error;
+  }
+
+  return (data || []).reduce((acc, reply) => {
+    const reviewId = reply.review_id;
+    if (!reviewId) {
+      return acc;
+    }
+
+    if (!acc[reviewId]) {
+      acc[reviewId] = [];
+    }
+
+    acc[reviewId].push(reply);
+    return acc;
+  }, {});
+};
+
 const saveHotel = async (hotelData) => {
   const normalizedHotel = normalizeGoogleHotel(hotelData);
   if (!normalizedHotel.hotel_id) {
@@ -254,7 +313,7 @@ export const getHotelReviews = async (req, res) => {
 
   try {
     const { data, error } = await supabase
-      .from('Review_Master')
+      .from('review_master')
       .select('review_id, hotel_id, user_id, user_email, comment, star, created_at')
       .eq('hotel_id', String(hotelId).trim())
       .order('created_at', { ascending: false });
@@ -268,9 +327,16 @@ export const getHotelReviews = async (req, res) => {
       });
     }
 
+    const reviewIds = (data || []).map((review) => review.review_id).filter(Boolean);
+    const replyMap = await fetchReviewRepliesMap(reviewIds);
+    const reviewsWithReplies = (data || []).map((review) => ({
+      ...review,
+      admin_replies: replyMap[review.review_id] || [],
+    }));
+
     return res.status(200).json({
       success: true,
-      reviews: data || [],
+      reviews: reviewsWithReplies,
     });
   } catch (err) {
     console.error('[getHotelReviews] Unexpected error:', err);
@@ -282,18 +348,59 @@ export const getHotelReviews = async (req, res) => {
   }
 };
 
+const ensureHotelExistsForReview = async ({ hotelId, hotelName, address, rating }) => {
+  const { data: existingHotel, error: existingHotelError } = await supabase
+    .from('Hotel_Master')
+    .select('hotel_id')
+    .eq('hotel_id', hotelId)
+    .maybeSingle();
+
+  if (existingHotelError) {
+    throw existingHotelError;
+  }
+
+  if (existingHotel) {
+    return;
+  }
+
+  if (!hotelName || !address) {
+    const missingHotelError = new Error('Hotel record is missing. Include hotel_name and address when submitting a review.');
+    missingHotelError.statusCode = 400;
+    throw missingHotelError;
+  }
+
+  const payload = {
+    hotel_id: hotelId,
+    hotel_name: String(hotelName).trim().slice(0, 255),
+    address: String(address).trim().slice(0, 500),
+    rating: Number.isFinite(Number(rating)) ? Number(rating) : 0,
+  };
+
+  const { error } = await supabase
+    .from('Hotel_Master')
+    .upsert(payload, { onConflict: 'hotel_id' })
+    .select('hotel_id')
+    .single();
+
+  if (error) {
+    throw error;
+  }
+};
+
 // POST a review (comment + star) for a specific hotel
 export const createHotelReview = async (req, res) => {
   const userId = req.user?.id;
   const userEmail = req.user?.email || null;
   const { hotelId } = req.params;
-  const { comment, star } = req.body;
+  const { comment, star, hotel_name: hotelName, address, rating } = req.body;
 
   if (!userId) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  if (!hotelId) {
+  const normalizedHotelId = String(hotelId || '').trim();
+
+  if (!normalizedHotelId) {
     return res.status(400).json({ success: false, error: 'hotelId is required.' });
   }
 
@@ -309,8 +416,15 @@ export const createHotelReview = async (req, res) => {
   }
 
   try {
+    await ensureHotelExistsForReview({
+      hotelId: normalizedHotelId,
+      hotelName: String(hotelName || '').trim(),
+      address: String(address || '').trim(),
+      rating,
+    });
+
     const payload = {
-      hotel_id: String(hotelId).trim(),
+      hotel_id: normalizedHotelId,
       user_id: userId,
       user_email: userEmail,
       comment: sanitizedComment,
@@ -318,13 +432,22 @@ export const createHotelReview = async (req, res) => {
     };
 
     const { data, error } = await supabase
-      .from('Review_Master')
+      .from('review_master')
       .insert(payload)
       .select('review_id, hotel_id, user_id, user_email, comment, star, created_at')
       .single();
 
     if (error) {
       console.error('[createHotelReview] Supabase insert error:', error);
+
+      if (error.code === '22001') {
+        return res.status(400).json({
+          success: false,
+          error: 'Schema mismatch for hotel_id column. Ensure hotel_id is TEXT in hotel/review/booking tables.',
+          details: error.message,
+        });
+      }
+
       return res.status(500).json({
         success: false,
         error: 'Failed to save review.',
@@ -339,6 +462,14 @@ export const createHotelReview = async (req, res) => {
     });
   } catch (err) {
     console.error('[createHotelReview] Unexpected error:', err);
+
+    if (err?.statusCode) {
+      return res.status(err.statusCode).json({
+        success: false,
+        error: err.message,
+      });
+    }
+
     return res.status(500).json({
       success: false,
       error: 'Server error while submitting review.',
@@ -354,14 +485,34 @@ export const getAdminHotels = async (req, res) => {
   }
 
   try {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('Hotel_Master')
       .select('*')
       .eq('created_by', userId)
       .order('hotel_id', { ascending: false });
 
     if (error) {
+      console.warn('[getAdminHotels] created_by query failed; trying fallback strategy.', error);
+      const fallbackResult = await supabase
+        .from('Hotel_Master')
+        .select('*')
+        .order('hotel_id', { ascending: false });
+
+      data = (fallbackResult.data || []).filter((hotel) => String(hotel?.hotel_id || '').startsWith('admin_'));
+      error = fallbackResult.error;
+    }
+
+    if (error) {
       console.error('[getAdminHotels] Supabase query error:', error);
+
+      if (isSchemaMismatchError(error)) {
+        return res.status(200).json({
+          success: true,
+          hotels: [],
+          warning: 'Hotel schema mismatch detected. Returning empty admin hotels list.',
+        });
+      }
+
       return res.status(500).json({
         success: false,
         error: 'Failed to fetch admin hotels.',
@@ -413,11 +564,32 @@ export const createAdminHotel = async (req, res) => {
   };
 
   try {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('Hotel_Master')
       .insert(payload)
       .select('*')
       .single();
+
+    if (isMissingCreatedByColumnError(error)) {
+      console.warn('[createAdminHotel] created_by column missing; retrying insert without created_by.');
+      const fallbackPayload = {
+        hotel_id: payload.hotel_id,
+        hotel_name: payload.hotel_name,
+        address: payload.address,
+        rating: payload.rating,
+        hotel_url: payload.hotel_url,
+        hotel_details: payload.hotel_details,
+      };
+
+      const fallbackResult = await supabase
+        .from('Hotel_Master')
+        .insert(fallbackPayload)
+        .select('*')
+        .single();
+
+      data = fallbackResult.data;
+      error = fallbackResult.error;
+    }
 
     if (error) {
       console.error('[createAdminHotel] Supabase insert error:', error);
@@ -438,6 +610,93 @@ export const createAdminHotel = async (req, res) => {
     return res.status(500).json({
       success: false,
       error: 'Server error while saving admin hotel.',
+      details: err.message,
+    });
+  }
+};
+
+export const createAdminReviewReply = async (req, res) => {
+  const adminUserId = req.user?.id;
+  const { hotelId, reviewId } = req.params;
+  const { reply_text: replyText } = req.body || {};
+
+  if (!adminUserId) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' });
+  }
+
+  const normalizedHotelId = String(hotelId || '').trim();
+  const normalizedReviewId = String(reviewId || '').trim();
+  const sanitizedReply = String(replyText || '').trim();
+
+  if (!normalizedHotelId || !normalizedReviewId) {
+    return res.status(400).json({ success: false, error: 'hotelId and reviewId are required.' });
+  }
+
+  if (!sanitizedReply) {
+    return res.status(400).json({ success: false, error: 'reply_text is required.' });
+  }
+
+  try {
+    const { data: reviewRecord, error: reviewError } = await supabase
+      .from('review_master')
+      .select('review_id, hotel_id')
+      .eq('review_id', normalizedReviewId)
+      .eq('hotel_id', normalizedHotelId)
+      .maybeSingle();
+
+    if (reviewError) {
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to validate review for reply.',
+        details: reviewError.message,
+      });
+    }
+
+    if (!reviewRecord) {
+      return res.status(404).json({
+        success: false,
+        error: 'Review not found for the selected hotel.',
+      });
+    }
+
+    const insertPayload = {
+      review_id: normalizedReviewId,
+      hotel_id: normalizedHotelId,
+      admin_user_id: adminUserId,
+      reply_text: sanitizedReply,
+    };
+
+    const { data, error } = await supabase
+      .from('review_reply')
+      .insert(insertPayload)
+      .select('reply_id, review_id, hotel_id, admin_user_id, reply_text, created_at')
+      .single();
+
+    if (error) {
+      if (isMissingReviewReplyTableError(error)) {
+        return res.status(400).json({
+          success: false,
+          error: 'review_reply table is missing. Run the SQL migration for admin replies.',
+          details: error.message,
+        });
+      }
+
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to save admin reply.',
+        details: error.message,
+      });
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: 'Reply added successfully.',
+      reply: data,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      error: 'Server error while saving admin reply.',
       details: err.message,
     });
   }

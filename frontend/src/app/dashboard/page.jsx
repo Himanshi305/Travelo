@@ -7,6 +7,7 @@ import axios from '../../services/axios';
 const Dashboard = () => {
   const { user } = useContext(AuthContext);
   const isAdmin = user?.user_metadata?.role === 'admin';
+
   const [hotels, setHotels] = useState([]);
   const [reviewForms, setReviewForms] = useState({});
   const [hotelReviewsMap, setHotelReviewsMap] = useState({});
@@ -14,18 +15,29 @@ const Dashboard = () => {
   const [reviewSubmittingMap, setReviewSubmittingMap] = useState({});
   const [reviewStatusMap, setReviewStatusMap] = useState({});
 
+  const [replyForms, setReplyForms] = useState({});
+  const [replySubmittingMap, setReplySubmittingMap] = useState({});
+  const [replyStatusMap, setReplyStatusMap] = useState({});
+
   useEffect(() => {
-    if (!isAdmin) {
+    if (user?.id) {
       fetchHotels();
     }
-  }, [user, isAdmin]);
+  }, [user?.id, isAdmin]);
 
   const fetchHotels = async () => {
     try {
-      const res = await axios.get('/api/hotels');
-      setHotels(res.data || []);
+      if (isAdmin) {
+        const { data } = await axios.get('/api/hotels/admin');
+        setHotels(Array.isArray(data?.hotels) ? data.hotels : []);
+        return;
+      }
+
+      const { data } = await axios.get('/api/hotels');
+      setHotels(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error(err);
+      console.error('Failed to fetch hotels for dashboard:', err);
+      setHotels([]);
     }
   };
 
@@ -42,6 +54,13 @@ const Dashboard = () => {
         star: prev?.[hotelId]?.star || 0,
         [field]: value,
       },
+    }));
+  };
+
+  const setReplyFormField = (reviewId, value) => {
+    setReplyForms((prev) => ({
+      ...prev,
+      [reviewId]: value,
     }));
   };
 
@@ -116,6 +135,43 @@ const Dashboard = () => {
     }
   };
 
+  const submitAdminReply = async (hotelId, reviewId) => {
+    const replyText = String(replyForms?.[reviewId] || '').trim();
+
+    if (!replyText) {
+      setReplyStatusMap((prev) => ({ ...prev, [reviewId]: { type: 'error', message: 'Please write a reply.' } }));
+      return;
+    }
+
+    setReplySubmittingMap((prev) => ({ ...prev, [reviewId]: true }));
+    setReplyStatusMap((prev) => ({ ...prev, [reviewId]: { type: '', message: '' } }));
+
+    try {
+      const { data } = await axios.post(
+        `/api/hotels/${encodeURIComponent(hotelId)}/reviews/${encodeURIComponent(reviewId)}/reply`,
+        { reply_text: replyText }
+      );
+
+      setReplyStatusMap((prev) => ({
+        ...prev,
+        [reviewId]: { type: 'success', message: data?.message || 'Reply added successfully.' },
+      }));
+      setReplyForms((prev) => ({ ...prev, [reviewId]: '' }));
+      await fetchHotelReviews(hotelId);
+    } catch (err) {
+      console.error('Failed to submit admin reply:', err);
+      setReplyStatusMap((prev) => ({
+        ...prev,
+        [reviewId]: {
+          type: 'error',
+          message: err?.response?.data?.error || 'Failed to submit reply.',
+        },
+      }));
+    } finally {
+      setReplySubmittingMap((prev) => ({ ...prev, [reviewId]: false }));
+    }
+  };
+
   useEffect(() => {
     hotels.forEach((hotel) => {
       const hotelId = resolveHotelId(hotel);
@@ -124,7 +180,6 @@ const Dashboard = () => {
       }
     });
   }, [hotels]);
-
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-950 text-white">
@@ -155,33 +210,37 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {!isAdmin && (
-          <div className="mb-8 rounded-2xl border border-white/20 bg-white/10 p-6 backdrop-blur-md">
-            <h2 className="text-3xl font-bold mb-6">Stored Hotels</h2>
-            {hotels.length === 0 ? (
-              <p className="text-gray-300">No hotels stored yet.</p>
-            ) : (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {hotels.map((hotel) => (
-                  <div key={hotel.place_id || hotel.hotel_id || `${hotel.hotel_name}-${hotel.address}`} className="rounded-xl border border-white/20 bg-black/30 p-4 transition hover:bg-black/40">
-                    {(() => {
-                      const hotelId = resolveHotelId(hotel);
-                      const reviewForm = reviewForms?.[hotelId] || { comment: '', star: 0 };
-                      const reviewStatus = reviewStatusMap?.[hotelId] || { type: '', message: '' };
-                      const hotelReviews = hotelReviewsMap?.[hotelId] || [];
-                      const isLoadingReviews = !!reviewLoadingMap?.[hotelId];
-                      const isSubmittingReview = !!reviewSubmittingMap?.[hotelId];
+        <div className="mb-8 rounded-2xl border border-white/20 bg-white/10 p-6 backdrop-blur-md">
+          <h2 className="text-3xl font-bold mb-6">{isAdmin ? 'Your Added Hotels' : 'Stored Hotels'}</h2>
+          {hotels.length === 0 ? (
+            <p className="text-gray-300">No hotels available yet.</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {hotels.map((hotel) => (
+                <div key={hotel.place_id || hotel.hotel_id || `${hotel.hotel_name}-${hotel.address}`} className="rounded-xl border border-white/20 bg-black/30 p-4 transition hover:bg-black/40">
+                  {(() => {
+                    const hotelId = resolveHotelId(hotel);
+                    const reviewForm = reviewForms?.[hotelId] || { comment: '', star: 0 };
+                    const reviewStatus = reviewStatusMap?.[hotelId] || { type: '', message: '' };
+                    const hotelReviews = hotelReviewsMap?.[hotelId] || [];
+                    const isLoadingReviews = !!reviewLoadingMap?.[hotelId];
+                    const isSubmittingReview = !!reviewSubmittingMap?.[hotelId];
 
-                      return (
-                        <>
-                          <h3 className="text-xl font-bold">{hotel.hotel_name}</h3>
-                          <p className="text-sm text-gray-300 mt-1">{hotel.address}</p>
-                          <div className="mt-3 text-sm text-gray-300 space-y-1">
-                            <p>Rating: {Number(hotel.rating || 0).toFixed(1)}</p>
+                    return (
+                      <>
+                        <h3 className="text-xl font-bold">{hotel.hotel_name}</h3>
+                        <p className="text-sm text-gray-300 mt-1">{hotel.address}</p>
+                        <div className="mt-3 text-sm text-gray-300 space-y-1">
+                          <p>Rating: {Number(hotel.rating || 0).toFixed(1)}</p>
+                          {isAdmin ? (
+                            <p>Details: {hotel.hotel_details || 'No details available.'}</p>
+                          ) : (
                             <p>Price/Night: ${Number(hotel.price_per_night || 0).toFixed(2)}</p>
-                            {hotel.contact_no && <p>Contact: {hotel.contact_no}</p>}
-                          </div>
+                          )}
+                          {hotel.contact_no && <p>Contact: {hotel.contact_no}</p>}
+                        </div>
 
+                        {!isAdmin && (
                           <div className="mt-4 rounded-lg border border-white/15 bg-black/35 p-3">
                             <p className="text-sm font-semibold">Add Review</p>
                             <div className="mt-2 flex gap-2">
@@ -220,39 +279,81 @@ const Dashboard = () => {
                               {isSubmittingReview ? 'Submitting...' : 'Submit Review'}
                             </button>
                           </div>
+                        )}
 
-                          <div className="mt-3 rounded-lg border border-white/15 bg-black/35 p-3">
-                            <p className="text-sm font-semibold">Latest Reviews</p>
-                            {isLoadingReviews ? (
-                              <p className="mt-2 text-xs text-gray-300">Loading reviews...</p>
-                            ) : hotelReviews.length === 0 ? (
-                              <p className="mt-2 text-xs text-gray-300">No reviews yet.</p>
-                            ) : (
-                              <div className="mt-2 space-y-2">
-                                {hotelReviews.slice(0, 3).map((review) => (
-                                  <div key={review.review_id} className="rounded bg-black/45 p-2">
+                        <div className="mt-3 rounded-lg border border-white/15 bg-black/35 p-3">
+                          <p className="text-sm font-semibold">Latest Reviews</p>
+                          {isLoadingReviews ? (
+                            <p className="mt-2 text-xs text-gray-300">Loading reviews...</p>
+                          ) : hotelReviews.length === 0 ? (
+                            <p className="mt-2 text-xs text-gray-300">No reviews yet.</p>
+                          ) : (
+                            <div className="mt-2 space-y-3">
+                              {hotelReviews.slice(0, 5).map((review) => {
+                                const reviewId = review.review_id;
+                                const reviewReplies = Array.isArray(review.admin_replies) ? review.admin_replies : [];
+                                const replyStatus = replyStatusMap?.[reviewId] || { type: '', message: '' };
+                                const isSubmittingReply = !!replySubmittingMap?.[reviewId];
+
+                                return (
+                                  <div key={reviewId} className="rounded bg-black/45 p-2">
                                     <p className="text-xs text-gray-200">{review.comment}</p>
                                     <p className="mt-1 text-[11px] text-gray-400">
                                       {'★'.repeat(Number(review.star || 0))}{'☆'.repeat(5 - Number(review.star || 0))}
                                     </p>
+
+                                    {reviewReplies.length > 0 && (
+                                      <div className="mt-2 space-y-2 rounded border border-white/10 bg-black/40 p-2">
+                                        {reviewReplies.map((reply) => (
+                                          <div key={reply.reply_id}>
+                                            <p className="text-[11px] font-semibold text-primary">Admin Reply</p>
+                                            <p className="text-[11px] text-gray-200">{reply.reply_text}</p>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+
+                                    {isAdmin && hotelId && reviewId && (
+                                      <div className="mt-2">
+                                        <textarea
+                                          value={replyForms?.[reviewId] || ''}
+                                          onChange={(e) => setReplyFormField(reviewId, e.target.value)}
+                                          rows={2}
+                                          placeholder="Reply to this comment"
+                                          className="w-full rounded-md border border-white/20 bg-black/40 px-3 py-2 text-xs"
+                                        />
+                                        {replyStatus.message && (
+                                          <p className={`mt-1 text-[11px] ${replyStatus.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+                                            {replyStatus.message}
+                                          </p>
+                                        )}
+                                        <button
+                                          type="button"
+                                          disabled={isSubmittingReply}
+                                          onClick={() => submitAdminReply(hotelId, reviewId)}
+                                          className="mt-2 rounded-md bg-primary px-3 py-1 text-xs font-semibold text-black hover:brightness-95 disabled:opacity-70"
+                                        >
+                                          {isSubmittingReply ? 'Replying...' : 'Post Reply'}
+                                        </button>
+                                      </div>
+                                    )}
                                   </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 };
 
 export default Dashboard;
-

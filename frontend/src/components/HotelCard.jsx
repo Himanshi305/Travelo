@@ -51,10 +51,6 @@ const HotelCard = ({ hotel, onSelect }) => {
           <span className="text-gray-300 ml-2 text-sm">{hotel.rating.toFixed(1)}</span>
         </div>
         <div className="mt-4">
-          <p className="text-lg font-semibold text-green-400">
-            {hotel.price_per_night > 0 ? `$${hotel.price_per_night.toFixed(2)}` : 'Price not available'}
-            <span className="text-sm text-gray-400"> / night</span>
-          </p>
           {hotel.contact_no && <p className="text-sm text-gray-400 mt-1">Contact: {hotel.contact_no}</p>}
           <p className="text-xs text-amber-300 mt-2">Click card to view hotel details</p>
         </div>

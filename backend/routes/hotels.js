@@ -7,6 +7,7 @@ import {
   createAdminHotel,
   getHotelReviews,
   createHotelReview,
+  createAdminReviewReply,
 } from '../controllers/hotelsController.js';
 import { auth, isAdmin } from '../middleware/auth.js';
 
@@ -19,5 +20,6 @@ router.get('/admin', auth, isAdmin, getAdminHotels);
 router.post('/admin', auth, isAdmin, createAdminHotel);
 router.get('/:hotelId/reviews', auth, getHotelReviews);
 router.post('/:hotelId/reviews', auth, createHotelReview);
+router.post('/:hotelId/reviews/:reviewId/reply', auth, isAdmin, createAdminReviewReply);
 
 export default router;

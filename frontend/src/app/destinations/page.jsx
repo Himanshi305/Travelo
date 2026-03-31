@@ -18,6 +18,12 @@ const DestinationsPage = () => {
   const router = useRouter();
 
   useEffect(() => {
+    if (isAdmin) {
+      router.replace('/hotels');
+    }
+  }, [isAdmin, router]);
+
+  useEffect(() => {
     if (user?.id) {
       fetchDestinations();
     }
@@ -138,7 +144,10 @@ const DestinationsPage = () => {
           <div className="mb-8 rounded-2xl border border-white/20 bg-white/10 p-6 backdrop-blur-md">
             <h2 className="text-3xl font-bold mb-4">Choose Destination on Map</h2>
             <p className="mb-4 text-gray-300">Search your destination and continue to nearby hotels.</p>
-            <RouteMap onPlaceSelect={setSelectedDestination} />
+            <RouteMap 
+              onPlaceSelect={setSelectedDestination} 
+              selectedDestinationName={selectedDestination?.name || ''}
+            />
             {selectedDestination?.name && (
               <p className="mt-3 text-sm text-primary">
                 Selected: {selectedDestination.name}
@@ -156,19 +165,29 @@ const DestinationsPage = () => {
         )}
 
         {/* Display destinations */}
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {destinations.map((destination, index) => (
-            <button
-              key={destination.destination_id ?? destination.id ?? `${destination.destination_name}-${index}`}
-              type="button"
-              onClick={() => saveAndGoToHotels(destination)}
-              className="rounded-xl border border-white/20 bg-white/10 p-4 text-left backdrop-blur-md transition hover:bg-white/15"
-            >
-              <h3 className="text-xl font-bold">{destination.destination_name}</h3>
-              <p className="mt-3 text-xs text-primary">Click to continue to hotels</p>
-            </button>
-          ))}
-        </div>
+        {destinations.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold mb-4">Your Saved Destinations</h2>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {destinations.map((destination, index) => (
+                <button
+                  key={destination.destination_id ?? destination.id ?? `${destination.destination_name}-${index}`}
+                  type="button"
+                  onClick={() => setSelectedDestination({
+                    name: destination.destination_name ||destination.name || '',
+                    address: destination.address || '',
+                    lat: destination.lat ?? null,
+                    lng: destination.lng ?? null,
+                  })}
+                  className="rounded-xl border border-white/20 bg-white/10 p-4 text-left backdrop-blur-md transition hover:bg-white/15"
+                >
+                  <h3 className="text-xl font-bold">{destination.destination_name}</h3>
+                  <p className="mt-3 text-xs text-primary">Click to view on map</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import AuthContext from '../context/AuthContext';
 
 const Navbar = () => {
   const { user, logout } = useContext(AuthContext);
+  const isAdmin = user?.user_metadata?.role === 'admin';
 
   const linkClass =
     'rounded-full px-3 py-1.5 text-sm font-medium text-white/85 transition hover:bg-white/15 hover:text-white';
@@ -24,9 +25,11 @@ const Navbar = () => {
               <li>
                 <Link href="/dashboard" className={linkClass}>Dashboard</Link>
               </li>
-              <li>
-                <Link href="/destinations" className={linkClass}>Destinations</Link>
-              </li>
+              {!isAdmin && (
+                <li>
+                  <Link href="/destinations" className={linkClass}>Destinations</Link>
+                </li>
+              )}
               <li>
                 <Link href="/hotels" className={linkClass}>Hotels</Link>
               </li>

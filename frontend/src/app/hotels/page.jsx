@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect, useRef, useState } from 'react';
 import axios from '../../services/axios';
 import AuthContext from '../../context/AuthContext';
 import RouteMap from '../../components/RouteMap';
@@ -27,6 +27,7 @@ const HotelsPage = () => {
   const [selectedHotel, setSelectedHotel] = useState(null);
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
   const [bookingStatus, setBookingStatus] = useState({ type: '', message: '' });
+  const bookingSectionRef = useRef(null);
   const [bookingForm, setBookingForm] = useState({
     check_in: '',
     check_out: '',
@@ -69,6 +70,17 @@ const HotelsPage = () => {
       email: prev.email || user?.email || '',
     }));
   }, [user?.user_metadata?.name, user?.email]);
+
+  useEffect(() => {
+    if (!selectedHotel || !bookingSectionRef.current) {
+      return;
+    }
+
+    bookingSectionRef.current.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    });
+  }, [selectedHotel]);
 
   const fetchAdminHotels = async () => {
     try {
@@ -194,6 +206,15 @@ const HotelsPage = () => {
     }));
   };
 
+  const getPostBookingRedirectUrl = (hotel) => {
+    const officialUrl = String(hotel?.hotel_url || '').trim();
+    if (/^https?:\/\//i.test(officialUrl)) {
+      return officialUrl;
+    }
+
+    return 'https://www.makemytrip.com/hotels/';
+  };
+
   const handleBookingSubmit = async (e) => {
     e.preventDefault();
     if (!selectedHotel) {
@@ -226,6 +247,11 @@ const HotelsPage = () => {
         check_out: '',
         phone_no: '',
       }));
+
+      const redirectUrl = getPostBookingRedirectUrl(selectedHotel);
+      setTimeout(() => {
+        window.location.assign(redirectUrl);
+      }, 800);
     } catch (error) {
       console.error('Failed to save booking:', error);
       setBookingStatus({
@@ -238,7 +264,7 @@ const HotelsPage = () => {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-slate-950 text-white">
+    <div className="relative min-h-screen overflow-x-hidden bg-slate-950 text-white">
       <div
         className="absolute inset-0 bg-center bg-cover"
         style={{
@@ -287,7 +313,7 @@ const HotelsPage = () => {
             </div>
 
             {selectedHotel && (
-              <div className="rounded-2xl border border-white/20 bg-white/10 p-6 backdrop-blur-md">
+              <div ref={bookingSectionRef} className="rounded-2xl border border-white/20 bg-white/10 p-6 backdrop-blur-md">
                 <h3 className="mb-4 text-2xl font-bold">Book: {selectedHotel.hotel_name}</h3>
                 <form onSubmit={handleBookingSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
@@ -342,19 +368,6 @@ const HotelsPage = () => {
                       value={bookingForm.email}
                       onChange={handleBookingChange}
                       className="w-full rounded-md border border-white/20 bg-black/30 px-3 py-2 text-white"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-white/80">Amount</label>
-                    <input
-                      type="number"
-                      name="amount"
-                      value={bookingForm.amount}
-                      onChange={handleBookingChange}
-                      className="w-full rounded-md border border-white/20 bg-black/30 px-3 py-2 text-white"
-                      min="0"
-                      step="0.01"
                       required
                     />
                   </div>
