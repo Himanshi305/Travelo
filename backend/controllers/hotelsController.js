@@ -30,6 +30,10 @@ const isMissingCreatedByColumnError = (error) => (
   error?.code === 'PGRST204' && String(error?.message || '').includes('created_by')
 );
 
+const isMissingColumnError = (error, columnName) => (
+  error?.code === 'PGRST204' && String(error?.message || '').includes(columnName)
+);
+
 const isSchemaMismatchError = (error) => {
   const code = String(error?.code || '');
   const message = String(error?.message || '').toLowerCase();
@@ -534,6 +538,37 @@ export const getAdminHotels = async (req, res) => {
   }
 };
 
+export const getAdminHotelsForUsers = async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('Hotel_Master')
+      .select('*')
+      .order('hotel_id', { ascending: false });
+
+    if (error) {
+      console.error('[getAdminHotelsForUsers] Supabase query error:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to fetch admin-added hotels.',
+        details: error.message,
+      });
+    }
+
+    const hotels = (data || []).filter((hotel) => String(hotel?.hotel_id || '').startsWith('admin_'));
+    return res.status(200).json({
+      success: true,
+      hotels,
+    });
+  } catch (err) {
+    console.error('[getAdminHotelsForUsers] Unexpected error:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error while fetching admin-added hotels.',
+      details: err.message,
+    });
+  }
+};
+
 export const createAdminHotel = async (req, res) => {
   const userId = req.user?.id;
 
@@ -541,10 +576,12 @@ export const createAdminHotel = async (req, res) => {
     return res.status(401).json({ success: false, error: 'Unauthorized' });
   }
 
-  const { hotel_name, hotel_url = '', hotel_details = '' } = req.body;
+  const { hotel_name, hotel_url = '', hotel_details = '', address = '', hotel_image_url = '' } = req.body;
   const trimmedName = String(hotel_name || '').trim();
   const trimmedUrl = String(hotel_url || '').trim();
   const trimmedDetails = String(hotel_details || '').trim();
+  const trimmedAddress = String(address || '').trim();
+  const trimmedImageUrl = String(hotel_image_url || '').trim();
 
   if (!trimmedName) {
     return res.status(400).json({
@@ -556,10 +593,11 @@ export const createAdminHotel = async (req, res) => {
   const payload = {
     hotel_id: makeAdminHotelId(trimmedName),
     hotel_name: trimmedName,
-    address: 'Not provided',
+    address: trimmedAddress || 'Not provided',
     rating: 0,
     hotel_url: trimmedUrl,
     hotel_details: trimmedDetails,
+    hotel_image_url: trimmedImageUrl,
     created_by: userId,
   };
 
@@ -570,8 +608,8 @@ export const createAdminHotel = async (req, res) => {
       .select('*')
       .single();
 
-    if (isMissingCreatedByColumnError(error)) {
-      console.warn('[createAdminHotel] created_by column missing; retrying insert without created_by.');
+    if (isMissingCreatedByColumnError(error) || isMissingColumnError(error, 'hotel_image_url')) {
+      console.warn('[createAdminHotel] optional column missing; retrying insert with reduced payload.');
       const fallbackPayload = {
         hotel_id: payload.hotel_id,
         hotel_name: payload.hotel_name,
@@ -580,6 +618,10 @@ export const createAdminHotel = async (req, res) => {
         hotel_url: payload.hotel_url,
         hotel_details: payload.hotel_details,
       };
+
+      if (!isMissingCreatedByColumnError(error)) {
+        fallbackPayload.created_by = payload.created_by;
+      }
 
       const fallbackResult = await supabase
         .from('Hotel_Master')

@@ -18,6 +18,11 @@ const Rating = ({ value }) => {
 };
 
 const getHotelImage = (hotel) => {
+  const directImageUrl = String(hotel?.hotel_image_url || '').trim();
+  if (/^https?:\/\//i.test(directImageUrl)) {
+    return directImageUrl;
+  }
+
   if (hotel.photo_reference && process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) {
     return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${hotel.photo_reference}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`;
   }

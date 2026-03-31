@@ -17,11 +17,15 @@ const HotelsPage = () => {
   const [adminHotelStatus, setAdminHotelStatus] = useState({ type: '', message: '' });
   const [adminHotelForm, setAdminHotelForm] = useState({
     hotel_name: '',
+    address: '',
+    hotel_image_url: '',
     hotel_url: '',
     hotel_details: '',
   });
 
   const [selectedDestination, setSelectedDestination] = useState(null);
+  const [featuredHotels, setFeaturedHotels] = useState([]);
+  const [featuredHotelsLoading, setFeaturedHotelsLoading] = useState(false);
   const [nearbyHotels, setNearbyHotels] = useState([]);
   const [hotelsLoading, setHotelsLoading] = useState(false);
   const [selectedHotel, setSelectedHotel] = useState(null);
@@ -40,7 +44,10 @@ const HotelsPage = () => {
   useEffect(() => {
     if (isAdmin) {
       fetchAdminHotels();
+      return;
     }
+
+    fetchFeaturedHotels();
   }, [isAdmin]);
 
   useEffect(() => {
@@ -92,6 +99,19 @@ const HotelsPage = () => {
     }
   };
 
+  const fetchFeaturedHotels = async () => {
+    setFeaturedHotelsLoading(true);
+    try {
+      const { data } = await axios.get('/api/hotels/featured');
+      setFeaturedHotels(Array.isArray(data?.hotels) ? data.hotels : []);
+    } catch (error) {
+      console.error('Failed to fetch admin-added hotels:', error);
+      setFeaturedHotels([]);
+    } finally {
+      setFeaturedHotelsLoading(false);
+    }
+  };
+
   const handleAdminHotelInput = (e) => {
     const { name, value } = e.target;
     setAdminHotelForm((prev) => ({
@@ -104,11 +124,18 @@ const HotelsPage = () => {
     e.preventDefault();
 
     const hotelName = (adminHotelForm.hotel_name || '').trim();
+    const hotelAddress = (adminHotelForm.address || '').trim();
+    const hotelImageUrl = (adminHotelForm.hotel_image_url || '').trim();
     const hotelUrl = (adminHotelForm.hotel_url || '').trim();
     const hotelDetails = (adminHotelForm.hotel_details || '').trim();
 
     if (!hotelName) {
       setAdminHotelStatus({ type: 'error', message: 'Hotel name is required.' });
+      return;
+    }
+
+    if (!hotelAddress) {
+      setAdminHotelStatus({ type: 'error', message: 'Hotel address is required.' });
       return;
     }
 
@@ -118,6 +145,8 @@ const HotelsPage = () => {
     try {
       const { data } = await axios.post('/api/hotels/admin', {
         hotel_name: hotelName,
+        address: hotelAddress,
+        hotel_image_url: hotelImageUrl,
         hotel_url: hotelUrl,
         hotel_details: hotelDetails,
       });
@@ -129,6 +158,8 @@ const HotelsPage = () => {
 
       setAdminHotelForm({
         hotel_name: '',
+        address: '',
+        hotel_image_url: '',
         hotel_url: '',
         hotel_details: '',
       });
@@ -294,6 +325,25 @@ const HotelsPage = () => {
             </div>
 
             <div className="rounded-2xl border border-white/20 bg-white/10 p-6 backdrop-blur-md">
+              <h3 className="mb-4 text-2xl font-bold">Admin Added Hotels</h3>
+              {featuredHotelsLoading ? (
+                <p className="text-white/80">Loading admin-added hotels...</p>
+              ) : featuredHotels.length === 0 ? (
+                <p className="text-white/80">No admin-added hotels yet.</p>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {featuredHotels.map((hotel) => (
+                    <HotelCard
+                      key={`featured-${hotel.hotel_id}`}
+                      hotel={hotel}
+                      onSelect={handleSelectHotel}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-white/20 bg-white/10 p-6 backdrop-blur-md">
               <h3 className="mb-4 text-2xl font-bold">Nearby Hotels</h3>
               {hotelsLoading ? (
                 <p className="text-white/80">Loading nearby hotels...</p>
@@ -410,6 +460,31 @@ const HotelsPage = () => {
               </div>
 
               <div>
+                <label className="block text-sm font-medium text-white/80">Address</label>
+                <input
+                  type="text"
+                  name="address"
+                  value={adminHotelForm.address}
+                  onChange={handleAdminHotelInput}
+                  placeholder="Enter hotel address"
+                  className="mt-1 w-full rounded-md border border-white/20 bg-black/30 px-3 py-2 text-white"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-white/80">Image URL</label>
+                <input
+                  type="url"
+                  name="hotel_image_url"
+                  value={adminHotelForm.hotel_image_url}
+                  onChange={handleAdminHotelInput}
+                  placeholder="https://example.com/hotel-image.jpg"
+                  className="mt-1 w-full rounded-md border border-white/20 bg-black/30 px-3 py-2 text-white"
+                />
+              </div>
+
+              <div>
                 <label className="block text-sm font-medium text-white/80">Hotel URL</label>
                 <input
                   type="url"
@@ -457,6 +532,14 @@ const HotelsPage = () => {
                   {adminHotels.map((hotel) => (
                     <div key={hotel.hotel_id} className="rounded-md border border-white/15 bg-black/35 p-3">
                       <p className="text-base font-semibold text-white">{hotel.hotel_name}</p>
+                      <p className="mt-1 text-sm text-gray-300">{hotel.address || 'Address not provided'}</p>
+                      {hotel.hotel_image_url && (
+                        <img
+                          src={hotel.hotel_image_url}
+                          alt={hotel.hotel_name}
+                          className="mt-2 h-28 w-full rounded object-cover"
+                        />
+                      )}
                       {hotel.hotel_url && (
                         <a
                           href={hotel.hotel_url}

@@ -4,6 +4,7 @@ import {
   getAllHotels,
   createHotel,
   getAdminHotels,
+  getAdminHotelsForUsers,
   createAdminHotel,
   getHotelReviews,
   createHotelReview,
@@ -15,6 +16,7 @@ const router = express.Router();
 
 router.get('/nearby', auth, getNearbyHotels);
 router.get('/', auth, getAllHotels);
+router.get('/featured', auth, getAdminHotelsForUsers);
 router.post('/', auth, createHotel);
 router.get('/admin', auth, isAdmin, getAdminHotels);
 router.post('/admin', auth, isAdmin, createAdminHotel);
