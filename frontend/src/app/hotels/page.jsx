@@ -7,6 +7,25 @@ import RouteMap from '../../components/RouteMap';
 import HotelCard from '../../components/HotelCard';
 
 const getDestinationStorageKey = (userId) => `destination:${userId || 'guest'}`;
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
+
+const resolveHotelImageUrl = (rawUrl) => {
+  const normalized = String(rawUrl || '').trim();
+
+  if (!normalized) {
+    return '';
+  }
+
+  if (/^https?:\/\//i.test(normalized)) {
+    return normalized;
+  }
+
+  if (normalized.startsWith('/')) {
+    return `${API_BASE_URL}${normalized}`;
+  }
+
+  return normalized;
+};
 
 const HotelsPage = () => {
   const { user } = useContext(AuthContext);
@@ -18,10 +37,10 @@ const HotelsPage = () => {
   const [adminHotelForm, setAdminHotelForm] = useState({
     hotel_name: '',
     address: '',
-    hotel_image_url: '',
     hotel_url: '',
     hotel_details: '',
   });
+  const [adminHotelImageFile, setAdminHotelImageFile] = useState(null);
 
   const [selectedDestination, setSelectedDestination] = useState(null);
   const [featuredHotels, setFeaturedHotels] = useState([]);
@@ -125,7 +144,6 @@ const HotelsPage = () => {
 
     const hotelName = (adminHotelForm.hotel_name || '').trim();
     const hotelAddress = (adminHotelForm.address || '').trim();
-    const hotelImageUrl = (adminHotelForm.hotel_image_url || '').trim();
     const hotelUrl = (adminHotelForm.hotel_url || '').trim();
     const hotelDetails = (adminHotelForm.hotel_details || '').trim();
 
@@ -143,12 +161,20 @@ const HotelsPage = () => {
     setAdminHotelStatus({ type: '', message: '' });
 
     try {
-      const { data } = await axios.post('/api/hotels/admin', {
-        hotel_name: hotelName,
-        address: hotelAddress,
-        hotel_image_url: hotelImageUrl,
-        hotel_url: hotelUrl,
-        hotel_details: hotelDetails,
+      const formData = new FormData();
+      formData.append('hotel_name', hotelName);
+      formData.append('address', hotelAddress);
+      formData.append('hotel_url', hotelUrl);
+      formData.append('hotel_details', hotelDetails);
+
+      if (adminHotelImageFile) {
+        formData.append('hotel_image', adminHotelImageFile);
+      }
+
+      const { data } = await axios.post('/api/hotels/admin', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
       });
 
       setAdminHotelStatus({
@@ -159,10 +185,10 @@ const HotelsPage = () => {
       setAdminHotelForm({
         hotel_name: '',
         address: '',
-        hotel_image_url: '',
         hotel_url: '',
         hotel_details: '',
       });
+      setAdminHotelImageFile(null);
 
       fetchAdminHotels();
     } catch (error) {
@@ -473,13 +499,13 @@ const HotelsPage = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-white/80">Image URL</label>
+                <label className="block text-sm font-medium text-white/80">Hotel Image</label>
                 <input
-                  type="url"
-                  name="hotel_image_url"
-                  value={adminHotelForm.hotel_image_url}
-                  onChange={handleAdminHotelInput}
-                  placeholder="https://example.com/hotel-image.jpg"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    setAdminHotelImageFile(e.target.files?.[0] || null);
+                  }}
                   className="mt-1 w-full rounded-md border border-white/20 bg-black/30 px-3 py-2 text-white"
                 />
               </div>
@@ -535,7 +561,7 @@ const HotelsPage = () => {
                       <p className="mt-1 text-sm text-gray-300">{hotel.address || 'Address not provided'}</p>
                       {hotel.hotel_image_url && (
                         <img
-                          src={hotel.hotel_image_url}
+                          src={resolveHotelImageUrl(hotel.hotel_image_url)}
                           alt={hotel.hotel_name}
                           className="mt-2 h-28 w-full rounded object-cover"
                         />

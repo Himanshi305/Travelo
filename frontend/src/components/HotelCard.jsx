@@ -1,6 +1,8 @@
 'use client';
 import React from 'react';
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
+
 const Star = ({ filled }) => (
   <span className={`text-yellow-500 ${filled ? ' ' : 'text-gray-600'}`}>★</span>
 );
@@ -21,6 +23,10 @@ const getHotelImage = (hotel) => {
   const directImageUrl = String(hotel?.hotel_image_url || '').trim();
   if (/^https?:\/\//i.test(directImageUrl)) {
     return directImageUrl;
+  }
+
+  if (directImageUrl.startsWith('/')) {
+    return `${API_BASE_URL}${directImageUrl}`;
   }
 
   if (hotel.photo_reference && process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) {

@@ -121,6 +121,7 @@ const Dashboard = () => {
       }));
 
       await fetchHotelReviews(hotelId);
+      await fetchHotels();
     } catch (err) {
       console.error('Failed to submit hotel review:', err);
       setReviewStatusMap((prev) => ({
@@ -232,11 +233,7 @@ const Dashboard = () => {
                         <p className="text-sm text-gray-300 mt-1">{hotel.address}</p>
                         <div className="mt-3 text-sm text-gray-300 space-y-1">
                           <p>Rating: {Number(hotel.rating || 0).toFixed(1)}</p>
-                          {isAdmin ? (
-                            <p>Details: {hotel.hotel_details || 'No details available.'}</p>
-                          ) : (
-                            <p>Price/Night: ${Number(hotel.price_per_night || 0).toFixed(2)}</p>
-                          )}
+                          {isAdmin && <p>Details: {hotel.hotel_details || 'No details available.'}</p>}
                           {hotel.contact_no && <p>Contact: {hotel.contact_no}</p>}
                         </div>
 
@@ -331,9 +328,9 @@ const Dashboard = () => {
                                           type="button"
                                           disabled={isSubmittingReply}
                                           onClick={() => submitAdminReply(hotelId, reviewId)}
-                                          className="mt-2 rounded-md bg-primary px-3 py-1 text-xs font-semibold text-black hover:brightness-95 disabled:opacity-70"
+                                          className="mt-2 w-full rounded-md border border-emerald-200 bg-emerald-400 px-3 py-2 text-xs font-semibold text-black hover:bg-emerald-300 disabled:opacity-70"
                                         >
-                                          {isSubmittingReply ? 'Replying...' : 'Post Reply'}
+                                          {isSubmittingReply ? 'Sending...' : 'Send Reply'}
                                         </button>
                                       </div>
                                     )}

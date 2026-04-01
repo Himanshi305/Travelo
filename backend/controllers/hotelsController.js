@@ -391,6 +391,41 @@ const ensureHotelExistsForReview = async ({ hotelId, hotelName, address, rating 
   }
 };
 
+const recomputeAndUpdateHotelRating = async (hotelId) => {
+  const normalizedHotelId = String(hotelId || '').trim();
+  if (!normalizedHotelId) {
+    return null;
+  }
+
+  const { data: reviews, error: reviewsError } = await supabase
+    .from('review_master')
+    .select('star')
+    .eq('hotel_id', normalizedHotelId);
+
+  if (reviewsError) {
+    throw reviewsError;
+  }
+
+  const stars = (reviews || [])
+    .map((review) => Number(review?.star))
+    .filter((value) => Number.isFinite(value) && value >= 1 && value <= 5);
+
+  const averageRating = stars.length
+    ? Number((stars.reduce((sum, value) => sum + value, 0) / stars.length).toFixed(1))
+    : 0;
+
+  const { error: updateError } = await supabase
+    .from('Hotel_Master')
+    .update({ rating: averageRating })
+    .eq('hotel_id', normalizedHotelId);
+
+  if (updateError) {
+    throw updateError;
+  }
+
+  return averageRating;
+};
+
 // POST a review (comment + star) for a specific hotel
 export const createHotelReview = async (req, res) => {
   const userId = req.user?.id;
@@ -459,10 +494,18 @@ export const createHotelReview = async (req, res) => {
       });
     }
 
+    let updatedHotelRating = null;
+    try {
+      updatedHotelRating = await recomputeAndUpdateHotelRating(normalizedHotelId);
+    } catch (ratingError) {
+      console.error('[createHotelReview] Failed to recompute hotel rating:', ratingError);
+    }
+
     return res.status(201).json({
       success: true,
       message: 'Review submitted successfully.',
       review: data,
+      hotel_rating: updatedHotelRating,
     });
   } catch (err) {
     console.error('[createHotelReview] Unexpected error:', err);
@@ -581,7 +624,14 @@ export const createAdminHotel = async (req, res) => {
   const trimmedUrl = String(hotel_url || '').trim();
   const trimmedDetails = String(hotel_details || '').trim();
   const trimmedAddress = String(address || '').trim();
-  const trimmedImageUrl = String(hotel_image_url || '').trim();
+  const uploadedImagePath = req.file?.path ? String(req.file.path).trim() : '';
+  if (req.file && !uploadedImagePath) {
+    return res.status(500).json({
+      success: false,
+      error: 'Image upload did not return a valid Cloudinary URL.',
+    });
+  }
+  const trimmedImageUrl = uploadedImagePath || String(hotel_image_url || '').trim();
 
   if (!trimmedName) {
     return res.status(400).json({
