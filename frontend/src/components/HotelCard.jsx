@@ -1,7 +1,7 @@
 'use client';
 import React from 'react';
 
-const API_BASE_URL = (process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || 'http://localhost:5000')
+const API_BASE_URL = (process.env.NEXT_PUBLIC_BACKEND_URL|| 'http://localhost:5000')
   .trim()
   .replace(/\/+$/, '')
   .replace(/\/api$/, '');

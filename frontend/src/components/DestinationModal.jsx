@@ -31,7 +31,7 @@ const DestinationModal = ({ isOpen, onClose, onSave, destination }) => {
                   type="text"
                   className="w-full px-4 py-2 border rounded-md"
                   value={name}
-                  onChange={(e) => setName(e.targe.value)}
+                  onChange={(e) => setName(e.target.value)}
                   required
                 />
               </div>
