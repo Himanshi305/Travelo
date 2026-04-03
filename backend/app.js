@@ -12,13 +12,26 @@ console.log("app.js is running");
 
 const app = express();
 
-const corsOptions = {
+const allowedOrigins = {
     origin: ['http://localhost:3000', process.env.FRONTEND_URL ], // Frontend URL
     credentials: true, // Allow cookies
     methods: ['GET', 'POST', 'PUT', 'DELETE'], // Allowed methods
     allowedHeaders: ['Content-Type', 'Authorization'] // Allowed headers
 }
 app.use(express.json());
+const corsOptions = {
+  origin: function (origin, callback) {
+    // allow requests with no origin (like mobile apps / curl)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+};
 app.use(cors(corsOptions));
 app.use(morgan('dev'));
 app.use(cookieParser());
