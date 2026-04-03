@@ -19,7 +19,7 @@ const corsOptions = {
     allowedHeaders: ['Content-Type', 'Authorization'] // Allowed headers
 }
 app.use(express.json());
-app.use(cors(corsOptions));
+app.use('*', cors(corsOptions));
 app.use(morgan('dev'));
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
