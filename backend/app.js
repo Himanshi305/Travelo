@@ -13,7 +13,7 @@ console.log("app.js is running");
 const app = express();
 
 const corsOptions = {
-    origin: 'http://localhost:3000', // Frontend URL
+    origin: ['http://localhost:3000', process.env.FRONTEND_URL ], // Frontend URL
     credentials: true, // Allow cookies
     methods: ['GET', 'POST', 'PUT', 'DELETE'], // Allowed methods
     allowedHeaders: ['Content-Type', 'Authorization'] // Allowed headers
