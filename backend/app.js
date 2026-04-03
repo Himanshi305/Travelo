@@ -12,26 +12,36 @@ console.log("app.js is running");
 
 const app = express();
 
-const allowedOrigins = {
-    origin: ['http://localhost:3000', process.env.FRONTEND_URL ], // Frontend URL
-    credentials: true, // Allow cookies
-    methods: ['GET', 'POST', 'PUT', 'DELETE'], // Allowed methods
-    allowedHeaders: ['Content-Type', 'Authorization'] // Allowed headers
-}
+const normalizeOrigin = (value) => String(value || '').trim().replace(/\/+$/, '');
+
+const allowedOrigins = new Set([
+  'http://localhost:3000',
+  ...String(process.env.FRONTEND_URL || '')
+    .split(',')
+    .map(normalizeOrigin)
+    .filter(Boolean),
+]);
+
 app.use(express.json());
+
 const corsOptions = {
   origin: function (origin, callback) {
     // allow requests with no origin (like mobile apps / curl)
     if (!origin) return callback(null, true);
 
-    if (allowedOrigins.includes(origin)) {
+    const normalizedOrigin = normalizeOrigin(origin);
+
+    if (allowedOrigins.has(normalizedOrigin)) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 };
+
 app.use(cors(corsOptions));
 app.use(morgan('dev'));
 app.use(cookieParser());
