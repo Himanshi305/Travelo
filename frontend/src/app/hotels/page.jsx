@@ -7,7 +7,7 @@ import RouteMap from '../../components/RouteMap';
 import HotelCard from '../../components/HotelCard';
 
 const getDestinationStorageKey = (userId) => `destination:${userId || 'guest'}`;
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.BACKEND_URL || 'http://localhost:5000';
 
 const resolveHotelImageUrl = (rawUrl) => {
   const normalized = String(rawUrl || '').trim();
