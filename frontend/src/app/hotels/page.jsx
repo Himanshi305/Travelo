@@ -36,6 +36,7 @@ const HotelsPage = () => {
 
   const [adminHotels, setAdminHotels] = useState([]);
   const [adminHotelSubmitting, setAdminHotelSubmitting] = useState(false);
+  const [adminDeletingHotelId, setAdminDeletingHotelId] = useState('');
   const [adminHotelStatus, setAdminHotelStatus] = useState({ type: '', message: '' });
   const [adminHotelForm, setAdminHotelForm] = useState({
     hotel_name: '',
@@ -201,6 +202,37 @@ const HotelsPage = () => {
       });
     } finally {
       setAdminHotelSubmitting(false);
+    }
+  };
+
+  const handleDeleteAdminHotel = async (hotelId) => {
+    const normalizedHotelId = String(hotelId || '').trim();
+    if (!normalizedHotelId) {
+      return;
+    }
+
+    const shouldDelete = window.confirm('Delete this hotel card? This action cannot be undone.');
+    if (!shouldDelete) {
+      return;
+    }
+
+    setAdminDeletingHotelId(normalizedHotelId);
+    setAdminHotelStatus({ type: '', message: '' });
+
+    try {
+      const { data } = await axios.delete(`/api/hotels/admin/${encodeURIComponent(normalizedHotelId)}`);
+      setAdminHotels((prev) => prev.filter((hotel) => String(hotel.hotel_id) !== normalizedHotelId));
+      setAdminHotelStatus({
+        type: 'success',
+        message: data?.message || 'Hotel deleted successfully.',
+      });
+    } catch (error) {
+      setAdminHotelStatus({
+        type: 'error',
+        message: error?.response?.data?.error || 'Failed to delete hotel.',
+      });
+    } finally {
+      setAdminDeletingHotelId('');
     }
   };
 
@@ -582,6 +614,16 @@ const HotelsPage = () => {
                       {hotel.hotel_details && (
                         <p className="mt-1 text-sm text-gray-300">{hotel.hotel_details}</p>
                       )}
+                      <div className="mt-3">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteAdminHotel(hotel.hotel_id)}
+                          disabled={adminDeletingHotelId === String(hotel.hotel_id)}
+                          className="rounded-md border border-red-300/40 bg-red-500/20 px-3 py-1 text-xs font-semibold text-red-200 hover:bg-red-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {adminDeletingHotelId === String(hotel.hotel_id) ? 'Deleting...' : 'Delete'}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>

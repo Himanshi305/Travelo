@@ -707,6 +707,100 @@ export const createAdminHotel = async (req, res) => {
   }
 };
 
+export const deleteAdminHotel = async (req, res) => {
+  const userId = req.user?.id;
+  const hotelId = String(req.params?.hotelId || '').trim();
+
+  if (!userId) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' });
+  }
+
+  if (!hotelId) {
+    return res.status(400).json({ success: false, error: 'hotelId is required.' });
+  }
+
+  if (!hotelId.startsWith('admin_')) {
+    return res.status(400).json({ success: false, error: 'Only admin-created hotels can be deleted here.' });
+  }
+
+  try {
+    let hotelRecord = null;
+    let canValidateOwner = true;
+
+    const ownerLookup = await supabase
+      .from('Hotel_Master')
+      .select('hotel_id, created_by')
+      .eq('hotel_id', hotelId)
+      .maybeSingle();
+
+    if (ownerLookup.error && isMissingCreatedByColumnError(ownerLookup.error)) {
+      canValidateOwner = false;
+      const fallbackLookup = await supabase
+        .from('Hotel_Master')
+        .select('hotel_id')
+        .eq('hotel_id', hotelId)
+        .maybeSingle();
+
+      if (fallbackLookup.error) {
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to validate hotel before deletion.',
+          details: fallbackLookup.error.message,
+        });
+      }
+
+      hotelRecord = fallbackLookup.data;
+    } else if (ownerLookup.error) {
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to validate hotel before deletion.',
+        details: ownerLookup.error.message,
+      });
+    } else {
+      hotelRecord = ownerLookup.data;
+    }
+
+    if (!hotelRecord) {
+      return res.status(404).json({ success: false, error: 'Hotel not found.' });
+    }
+
+    if (canValidateOwner && hotelRecord.created_by && String(hotelRecord.created_by) !== String(userId)) {
+      return res.status(403).json({ success: false, error: 'You can delete only hotels created by you.' });
+    }
+
+    let deleteQuery = supabase
+      .from('Hotel_Master')
+      .delete()
+      .eq('hotel_id', hotelId);
+
+    if (canValidateOwner) {
+      deleteQuery = deleteQuery.eq('created_by', userId);
+    }
+
+    const { error: deleteError } = await deleteQuery;
+
+    if (deleteError) {
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to delete hotel.',
+        details: deleteError.message,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Hotel deleted successfully.',
+      hotel_id: hotelId,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      error: 'Server error while deleting hotel.',
+      details: err.message,
+    });
+  }
+};
+
 export const createAdminReviewReply = async (req, res) => {
   const adminUserId = req.user?.id;
   const { hotelId, reviewId } = req.params;

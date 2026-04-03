@@ -6,6 +6,7 @@ import {
   getAdminHotels,
   getAdminHotelsForUsers,
   createAdminHotel,
+  deleteAdminHotel,
   getHotelReviews,
   createHotelReview,
   createAdminReviewReply,
@@ -21,6 +22,7 @@ router.get('/featured', auth, getAdminHotelsForUsers);
 router.post('/', auth, createHotel);
 router.get('/admin', auth, isAdmin, getAdminHotels);
 router.post('/admin', auth, isAdmin, uploadHotelImage.single('hotel_image'), createAdminHotel);
+router.delete('/admin/:hotelId', auth, isAdmin, deleteAdminHotel);
 router.get('/:hotelId/reviews', auth, getHotelReviews);
 router.post('/:hotelId/reviews', auth, createHotelReview);
 router.post('/:hotelId/reviews/:reviewId/reply', auth, isAdmin, createAdminReviewReply);
