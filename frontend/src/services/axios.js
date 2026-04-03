@@ -2,7 +2,7 @@ import axios from "axios";
 import supabase from "../lib/supabase";
 
 const api = axios.create({
-  baseURL: "http://localhost:5000", // Update with your backend URL
+  baseURL: process.env.BACKEND_URL,  // Update with your backend URL
   headers: {
     "Content-Type": "application/json",
   },
