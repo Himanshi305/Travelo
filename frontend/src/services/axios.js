@@ -1,8 +1,18 @@
 import axios from "axios";
 import supabase from "../lib/supabase";
 
+const rawBackendUrl =
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  process.env.BACKEND_URL ||
+  "http://localhost:5000";
+
+const normalizedBackendUrl = rawBackendUrl
+  .trim()
+  .replace(/\/+$/, "")
+  .replace(/\/api$/, "");
+
 const api = axios.create({
-  baseURL: process.env.BACKEND_URL,  // Update with your backend URL
+  baseURL: normalizedBackendUrl,
   headers: {
     "Content-Type": "application/json",
   },

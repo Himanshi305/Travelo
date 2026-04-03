@@ -72,25 +72,30 @@ export const AuthProvider = ({ children }) => {
   }, [router]);
 
   const login = async (email, password) => {
-  try {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (error) throw error;
+      if (error) throw error;
 
-    // Redirect to dashboard after successful login
-    router.push('/dashboard');
+      // Redirect to dashboard after successful login
+      router.push('/dashboard');
 
-    // Save token for backend requests
-    const token = data.session.access_token;
-    localStorage.setItem("token", token);
+      // Save token for backend requests
+      const token = data.session.access_token;
+      localStorage.setItem('token', token);
 
-  } catch (err) {
-    console.error(err);
-  }
-};
+      return { success: true };
+    } catch (err) {
+      console.error(err);
+      return {
+        success: false,
+        error: err?.message || 'Unable to login. Please try again.',
+      };
+    }
+  };
 
   const register = async (name, email, password, role) => {
     try {
@@ -120,8 +125,13 @@ export const AuthProvider = ({ children }) => {
       if (error) throw error;
       // You might want to redirect to a "check your email" page
       router.push('/login');
+      return { success: true };
     } catch (err) {
       console.error(err);
+      return {
+        success: false,
+        error: err?.message || 'Unable to register. Please try again.',
+      };
     }
   };
 

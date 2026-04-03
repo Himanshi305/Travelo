@@ -8,11 +8,22 @@ const Register = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('user');
+  const [errorMessage, setErrorMessage] = useState('');
   const { register } = useContext(AuthContext);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    register(name, email, password, role);
+    setErrorMessage('');
+
+    if (String(password || '').length < 6) {
+      setErrorMessage('Password must be at least 6 characters.');
+      return;
+    }
+
+    const result = await register(name, email, password, role);
+    if (!result?.success) {
+      setErrorMessage(result?.error || 'Unable to register. Please try again.');
+    }
   };
 
   return (
@@ -68,6 +79,9 @@ const Register = () => {
               required
               className="mt-2 w-full rounded-md border border-white/20 bg-black/25 px-4 py-2 text-white placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary"
             />
+            {errorMessage && (
+              <p className="mt-2 text-sm text-red-400">{errorMessage}</p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-300">

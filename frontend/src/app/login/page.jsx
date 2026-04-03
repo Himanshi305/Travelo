@@ -6,11 +6,17 @@ import AuthContext from '../../context/AuthContext';
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
   const { login } = useContext(AuthContext);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    login(email, password);
+    setErrorMessage('');
+
+    const result = await login(email, password);
+    if (!result?.success) {
+      setErrorMessage(result?.error || 'Unable to login. Please try again.');
+    }
   };
 
   return (
@@ -53,6 +59,9 @@ const Login = () => {
               required
               className="mt-2 w-full rounded-md border border-white/20 bg-black/25 px-4 py-2 text-white placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary"
             />
+            {errorMessage && (
+              <p className="mt-2 text-sm text-red-400">{errorMessage}</p>
+            )}
           </div>
           <button
             type="submit"
