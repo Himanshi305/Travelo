@@ -25,11 +25,6 @@ const Navbar = () => {
               <li>
                 <Link href="/dashboard" className={linkClass}>Dashboard</Link>
               </li>
-              {!isAdmin && (
-                <li>
-                  <Link href="/destinations" className={linkClass}>Destinations</Link>
-                </li>
-              )}
               <li>
                 <Link href="/hotels" className={linkClass}>Hotels</Link>
               </li>

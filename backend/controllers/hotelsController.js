@@ -26,13 +26,71 @@ const makeAdminHotelId = (hotelName) => {
   return `admin_${Date.now()}_${base}`;
 };
 
-const isMissingCreatedByColumnError = (error) => (
-  error?.code === 'PGRST204' && String(error?.message || '').includes('created_by')
-);
+const toTrimmedString = (value) => String(value || '').trim();
 
-const isMissingColumnError = (error, columnName) => (
-  error?.code === 'PGRST204' && String(error?.message || '').includes(columnName)
-);
+const buildAdminHotelAddress = ({ local_address, state, pin_code, country, address }) => {
+  const addressParts = [local_address, state, pin_code, country]
+    .map(toTrimmedString)
+    .filter(Boolean);
+
+  if (addressParts.length > 0) {
+    return addressParts.join(', ');
+  }
+
+  return toTrimmedString(address);
+};
+
+const isMissingOptionalHotelColumnError = (error) => {
+  const code = String(error?.code || '');
+  const message = String(error?.message || '').toLowerCase();
+  const isColumnMismatch = (
+    code === 'PGRST204'
+    || code === '42703'
+    || code === '42883'
+    || message.includes('schema cache')
+    || message.includes('column')
+  );
+
+  return (
+    isColumnMismatch
+    && [
+      'created_by',
+      'hotel_image_url',
+      'full_address',
+      'local_address',
+      'state',
+      'pin_code',
+      'country',
+    ].some((columnName) => message.includes(columnName))
+  );
+};
+
+const isMissingFullAddressFieldInTriggerError = (error) => {
+  const message = String(error?.message || '').toLowerCase();
+  return message.includes('record "new" has no field "full_address"');
+};
+
+const isMissingColumnError = (error, columnName) => {
+  const code = String(error?.code || '');
+  const message = String(error?.message || '').toLowerCase();
+  const normalizedColumnName = String(columnName || '').toLowerCase();
+
+  if (!normalizedColumnName) {
+    return false;
+  }
+
+  const isColumnMismatch = (
+    code === 'PGRST204'
+    || code === '42703'
+    || code === '42883'
+    || message.includes('schema cache')
+    || message.includes('column')
+  );
+
+  return isColumnMismatch && message.includes(normalizedColumnName);
+};
+
+const isMissingCreatedByColumnError = (error) => isMissingColumnError(error, 'created_by');
 
 const isSchemaMismatchError = (error) => {
   const code = String(error?.code || '');
@@ -53,6 +111,59 @@ const isMissingReviewReplyTableError = (error) => {
   const message = String(error?.message || '').toLowerCase();
 
   return code === '42P01' || message.includes('review_reply');
+};
+
+const normalizeSearchText = (value) => String(value || '').trim().toLowerCase();
+
+const parseLocationQuery = ({ address, state, country }) => {
+  const addressParts = String(address || '')
+    .split(',')
+    .map((part) => normalizeSearchText(part))
+    .filter(Boolean);
+
+  const searchCountry = normalizeSearchText(country) || addressParts[addressParts.length - 1] || '';
+  const locationTerms = [
+    normalizeSearchText(state),
+    ...addressParts.slice(0, -1),
+  ].filter(Boolean);
+
+  return {
+    country: searchCountry,
+    terms: [...new Set(locationTerms)],
+  };
+};
+
+const hotelMatchesLocation = (hotel, location) => {
+  const searchCountry = normalizeSearchText(location?.country);
+  const terms = Array.isArray(location?.terms) ? location.terms : [];
+
+  if (!searchCountry) {
+    return false;
+  }
+
+  const hotelLocationBlob = [
+    hotel?.hotel_name,
+    hotel?.state,
+    hotel?.country,
+    hotel?.address,
+    hotel?.full_address,
+    hotel?.local_address,
+  ]
+    .map(normalizeSearchText)
+    .filter(Boolean)
+    .join(' ');
+
+  const countryMatch = hotelLocationBlob.includes(searchCountry);
+
+  if (!countryMatch) {
+    return false;
+  }
+
+  if (terms.length === 0) {
+    return true;
+  }
+
+  return terms.some((term) => hotelLocationBlob.includes(term));
 };
 
 const fetchReviewRepliesMap = async (reviewIds) => {
@@ -597,7 +708,11 @@ export const getAdminHotelsForUsers = async (req, res) => {
       });
     }
 
-    const hotels = (data || []).filter((hotel) => String(hotel?.hotel_id || '').startsWith('admin_'));
+    const location = parseLocationQuery(req.query || {});
+    const hotels = (data || [])
+      .filter((hotel) => String(hotel?.hotel_id || '').startsWith('admin_'))
+      .filter((hotel) => hotelMatchesLocation(hotel, location));
+
     return res.status(200).json({
       success: true,
       hotels,
@@ -619,11 +734,31 @@ export const createAdminHotel = async (req, res) => {
     return res.status(401).json({ success: false, error: 'Unauthorized' });
   }
 
-  const { hotel_name, hotel_url = '', hotel_details = '', address = '', hotel_image_url = '' } = req.body;
+  const {
+    hotel_name,
+    hotel_url = '',
+    hotel_details = '',
+    address = '',
+    local_address = '',
+    state = '',
+    pin_code = '',
+    country = '',
+    hotel_image_url = '',
+  } = req.body;
   const trimmedName = String(hotel_name || '').trim();
   const trimmedUrl = String(hotel_url || '').trim();
   const trimmedDetails = String(hotel_details || '').trim();
-  const trimmedAddress = String(address || '').trim();
+  const trimmedAddress = buildAdminHotelAddress({
+    local_address,
+    state,
+    pin_code,
+    country,
+    address,
+  });
+  const trimmedLocalAddress = toTrimmedString(local_address);
+  const trimmedState = toTrimmedString(state);
+  const trimmedPinCode = toTrimmedString(pin_code);
+  const trimmedCountry = toTrimmedString(country);
   const uploadedImagePath = req.file?.path ? String(req.file.path).trim() : '';
   if (req.file && !uploadedImagePath) {
     return res.status(500).json({
@@ -644,9 +779,14 @@ export const createAdminHotel = async (req, res) => {
     hotel_id: makeAdminHotelId(trimmedName),
     hotel_name: trimmedName,
     address: trimmedAddress || 'Not provided',
+    full_address: trimmedAddress || 'Not provided',
     rating: 0,
     hotel_url: trimmedUrl,
     hotel_details: trimmedDetails,
+    local_address: trimmedLocalAddress,
+    state: trimmedState,
+    pin_code: trimmedPinCode,
+    country: trimmedCountry,
     hotel_image_url: trimmedImageUrl,
     created_by: userId,
   };
@@ -658,16 +798,21 @@ export const createAdminHotel = async (req, res) => {
       .select('*')
       .single();
 
-    if (isMissingCreatedByColumnError(error) || isMissingColumnError(error, 'hotel_image_url')) {
+    if (isMissingOptionalHotelColumnError(error)) {
       console.warn('[createAdminHotel] optional column missing; retrying insert with reduced payload.');
       const fallbackPayload = {
         hotel_id: payload.hotel_id,
         hotel_name: payload.hotel_name,
         address: payload.address,
+        full_address: payload.full_address,
         rating: payload.rating,
         hotel_url: payload.hotel_url,
         hotel_details: payload.hotel_details,
       };
+
+      if (isMissingColumnError(error, 'full_address')) {
+        delete fallbackPayload.full_address;
+      }
 
       if (!isMissingCreatedByColumnError(error)) {
         fallbackPayload.created_by = payload.created_by;
@@ -685,10 +830,23 @@ export const createAdminHotel = async (req, res) => {
 
     if (error) {
       console.error('[createAdminHotel] Supabase insert error:', error);
+
+      if (isMissingFullAddressFieldInTriggerError(error)) {
+        return res.status(500).json({
+          success: false,
+          error: 'Hotel schema is missing full_address column required by a DB trigger.',
+          details: "Run: ALTER TABLE \"Hotel_Master\" ADD COLUMN IF NOT EXISTS full_address VARCHAR(500) DEFAULT '';",
+        });
+      }
+
+      const detailParts = [error?.message, error?.details, error?.hint]
+        .filter((part) => String(part || '').trim())
+        .map((part) => String(part).trim());
+
       return res.status(500).json({
         success: false,
         error: 'Failed to save admin hotel.',
-        details: error.message,
+        details: detailParts.join(' | ') || 'Unknown database error.',
       });
     }
 

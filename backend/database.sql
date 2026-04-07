@@ -31,11 +31,17 @@ CREATE TABLE "Hotel_Master" (
   hotel_name VARCHAR(255) NOT NULL,
   booking_id TEXT,
   address VARCHAR(500) NOT NULL,
+  full_address VARCHAR(500) DEFAULT '',
+  local_address VARCHAR(255) DEFAULT '',
+  state VARCHAR(120) DEFAULT '',
+  pin_code VARCHAR(20) DEFAULT '',
+  country VARCHAR(120) DEFAULT '',
   price_per_night NUMERIC(10, 2) DEFAULT 0 CHECK (price_per_night >= 0),
   contact_no VARCHAR(30) DEFAULT '',
   rating NUMERIC(2, 1) DEFAULT 0 CHECK (rating >= 0 AND rating <= 5),
   hotel_url TEXT DEFAULT '',
   hotel_details TEXT DEFAULT '',
+  hotel_image_url TEXT DEFAULT '',
   created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );

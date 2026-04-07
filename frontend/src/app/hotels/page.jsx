@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useContext, useEffect, useRef, useState } from 'react';
+import countries from 'i18n-iso-countries';
+import en from 'i18n-iso-countries/langs/en.json';
 import axios from '../../services/axios';
 import AuthContext from '../../context/AuthContext';
-import RouteMap from '../../components/RouteMap';
+import HotelSearchMap from '../../components/HotelSearchMap';
 import HotelCard from '../../components/HotelCard';
 
 const getDestinationStorageKey = (userId) => `destination:${userId || 'guest'}`;
@@ -11,6 +13,49 @@ const API_BASE_URL = (process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5
   .trim()
   .replace(/\/+$/, '')
   .replace(/\/api$/, '');
+
+const normalizeSearchText = (value) => String(value || '').trim().toLowerCase();
+
+const buildDisplayAddress = (hotel) => {
+  const parts = [
+    hotel?.local_address,
+    hotel?.state,
+    hotel?.pin_code,
+    hotel?.country,
+  ]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+
+  if (parts.length > 0) {
+    return parts.join(', ');
+  }
+
+  return String(hotel?.address || '').trim();
+};
+
+const buildHotelSearchBlob = (hotel) => [
+  hotel?.hotel_name,
+  hotel?.address,
+  hotel?.local_address,
+  hotel?.state,
+  hotel?.pin_code,
+  hotel?.country,
+  hotel?.hotel_details,
+].map((value) => String(value || '').trim().toLowerCase()).join(' ');
+
+countries.registerLocale(en);
+
+const COUNTRY_OPTIONS = Object.entries(
+  countries.getNames('en', { select: 'official' })
+)
+  .map(([value, label]) => ({ value, label }))
+  .sort((left, right) => left.label.localeCompare(right.label));
+
+const COUNTRY_NAME_BY_CODE = Object.fromEntries(
+  COUNTRY_OPTIONS.map((country) => [country.value, country.label])
+);
+
+const getCountryLabel = (countryCode) => COUNTRY_NAME_BY_CODE[countryCode] || '';
 
 const resolveHotelImageUrl = (rawUrl) => {
   const normalized = String(rawUrl || '').trim();
@@ -40,8 +85,10 @@ const HotelsPage = () => {
   const [adminHotelStatus, setAdminHotelStatus] = useState({ type: '', message: '' });
   const [adminHotelForm, setAdminHotelForm] = useState({
     hotel_name: '',
-    address: '',
-    hotel_url: '',
+    local_address: '',
+    state: '',
+    pin_code: '',
+    country: '',
     hotel_details: '',
   });
   const [adminHotelImageFile, setAdminHotelImageFile] = useState(null);
@@ -49,8 +96,6 @@ const HotelsPage = () => {
   const [selectedDestination, setSelectedDestination] = useState(null);
   const [featuredHotels, setFeaturedHotels] = useState([]);
   const [featuredHotelsLoading, setFeaturedHotelsLoading] = useState(false);
-  const [nearbyHotels, setNearbyHotels] = useState([]);
-  const [hotelsLoading, setHotelsLoading] = useState(false);
   const [selectedHotel, setSelectedHotel] = useState(null);
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
   const [bookingStatus, setBookingStatus] = useState({ type: '', message: '' });
@@ -64,14 +109,65 @@ const HotelsPage = () => {
     amount: 0,
   });
 
+  const matchesAddressSearch = (hotel) => {
+    if (!selectedDestination?.address) {
+      return false;
+    }
+
+    const addressParts = [
+      ...selectedDestination.address
+      .split(',')
+      .map((part) => normalizeSearchText(part))
+      .filter(Boolean),
+      normalizeSearchText(selectedDestination.state),
+      normalizeSearchText(selectedDestination.country),
+    ].filter(Boolean);
+
+    const searchCountry = addressParts[addressParts.length - 1] || '';
+    const locationTerms = addressParts.slice(0, -1);
+
+    if (!searchCountry) {
+      return false;
+    }
+
+    const hotelLocationBlob = [
+      hotel?.hotel_name,
+      hotel?.state,
+      hotel?.country,
+      hotel?.address,
+      hotel?.full_address,
+      hotel?.local_address,
+    ]
+      .map((value) => normalizeSearchText(value))
+      .join(' ');
+
+    if (!hotelLocationBlob.includes(searchCountry)) {
+      return false;
+    }
+
+    if (locationTerms.length === 0) {
+      return true;
+    }
+
+    return locationTerms.some((term) => hotelLocationBlob.includes(term));
+  };
+
+  const filteredFeaturedHotels = featuredHotels.filter(matchesAddressSearch);
+  const hasSearchLocation = Boolean(selectedDestination?.address);
+
   useEffect(() => {
     if (isAdmin) {
       fetchAdminHotels();
       return;
     }
 
-    fetchFeaturedHotels();
-  }, [isAdmin]);
+    if (!selectedDestination?.address) {
+      setFeaturedHotels([]);
+      return;
+    }
+
+    fetchFeaturedHotels(selectedDestination);
+  }, [isAdmin, selectedDestination]);
 
   useEffect(() => {
     if (isAdmin) {
@@ -122,10 +218,23 @@ const HotelsPage = () => {
     }
   };
 
-  const fetchFeaturedHotels = async () => {
+  const fetchFeaturedHotels = async (destination) => {
+    const addressParts = String(destination?.address || '')
+      .split(',')
+      .map((part) => normalizeSearchText(part))
+      .filter(Boolean);
+
+    const searchPayload = {
+      address: String(destination?.address || '').trim(),
+      state: String(destination?.state || addressParts[addressParts.length - 2] || '').trim(),
+      country: String(destination?.country || addressParts[addressParts.length - 1] || '').trim(),
+    };
+
     setFeaturedHotelsLoading(true);
     try {
-      const { data } = await axios.get('/api/hotels/featured');
+      const { data } = await axios.get('/api/hotels/featured', {
+        params: searchPayload,
+      });
       setFeaturedHotels(Array.isArray(data?.hotels) ? data.hotels : []);
     } catch (error) {
       console.error('Failed to fetch admin-added hotels:', error);
@@ -147,17 +256,24 @@ const HotelsPage = () => {
     e.preventDefault();
 
     const hotelName = (adminHotelForm.hotel_name || '').trim();
-    const hotelAddress = (adminHotelForm.address || '').trim();
-    const hotelUrl = (adminHotelForm.hotel_url || '').trim();
+    const localAddress = (adminHotelForm.local_address || '').trim();
+    const state = (adminHotelForm.state || '').trim();
+    const pinCode = (adminHotelForm.pin_code || '').trim();
+    const countryCode = (adminHotelForm.country || '').trim();
+    const country = getCountryLabel(countryCode);
     const hotelDetails = (adminHotelForm.hotel_details || '').trim();
+    const composedAddress = [localAddress, state, pinCode, country].filter(Boolean).join(', ');
 
     if (!hotelName) {
       setAdminHotelStatus({ type: 'error', message: 'Hotel name is required.' });
       return;
     }
 
-    if (!hotelAddress) {
-      setAdminHotelStatus({ type: 'error', message: 'Hotel address is required.' });
+    if (!localAddress || !state || !pinCode || !countryCode || !country) {
+      setAdminHotelStatus({
+        type: 'error',
+        message: 'Local address, state, PIN, and country are required.',
+      });
       return;
     }
 
@@ -167,8 +283,11 @@ const HotelsPage = () => {
     try {
       const formData = new FormData();
       formData.append('hotel_name', hotelName);
-      formData.append('address', hotelAddress);
-      formData.append('hotel_url', hotelUrl);
+      formData.append('address', composedAddress);
+      formData.append('local_address', localAddress);
+      formData.append('state', state);
+      formData.append('pin_code', pinCode);
+      formData.append('country', country);
       formData.append('hotel_details', hotelDetails);
 
       if (adminHotelImageFile) {
@@ -188,17 +307,21 @@ const HotelsPage = () => {
 
       setAdminHotelForm({
         hotel_name: '',
-        address: '',
-        hotel_url: '',
+        local_address: '',
+        state: '',
+        pin_code: '',
+        country: '',
         hotel_details: '',
       });
       setAdminHotelImageFile(null);
 
       fetchAdminHotels();
     } catch (error) {
+      const backendError = error?.response?.data?.error || 'Failed to add hotel.';
+      const backendDetails = error?.response?.data?.details || '';
       setAdminHotelStatus({
         type: 'error',
-        message: error?.response?.data?.error || 'Failed to add hotel.',
+        message: backendDetails ? `${backendError} (${backendDetails})` : backendError,
       });
     } finally {
       setAdminHotelSubmitting(false);
@@ -235,37 +358,6 @@ const HotelsPage = () => {
       setAdminDeletingHotelId('');
     }
   };
-
-  const fetchNearbyHotels = async (lat, lng) => {
-    if (!lat || !lng) {
-      return;
-    }
-
-    setHotelsLoading(true);
-    setBookingStatus({ type: '', message: '' });
-    try {
-      const { data } = await axios.get('/api/hotels/nearby', {
-        params: { lat, lng },
-      });
-      setNearbyHotels(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Failed to fetch nearby hotels:', error);
-      setNearbyHotels([]);
-      setBookingStatus({ type: 'error', message: 'Failed to load nearby hotels.' });
-    } finally {
-      setHotelsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (isAdmin) {
-      return;
-    }
-
-    if (selectedDestination?.lat && selectedDestination?.lng) {
-      fetchNearbyHotels(selectedDestination.lat, selectedDestination.lng);
-    }
-  }, [isAdmin, selectedDestination?.lat, selectedDestination?.lng]);
 
   const handleSelectDestination = (destination) => {
     setSelectedDestination(destination);
@@ -374,52 +466,42 @@ const HotelsPage = () => {
         {!isAdmin ? (
           <div className="mx-auto mt-8 max-w-6xl space-y-6">
             <div className="rounded-2xl border border-white/20 bg-white/10 p-6 backdrop-blur-md">
-              <h2 className="mb-3 text-3xl font-bold">Find Nearby Hotels</h2>
-              <p className="mb-4 text-white/80">Search destination on map to get nearby hotels.</p>
-              <RouteMap
+              <h2 className="mb-3 text-3xl font-bold">Search Hotels by Location</h2>
+              <p className="mb-4 text-white/80">Search for a destination to see nearby hotels on the map and get directions.</p>
+              <HotelSearchMap
                 onPlaceSelect={handleSelectDestination}
-                selectedDestinationName={selectedDestination?.name || ''}
+                hotels={filteredFeaturedHotels}
+                selectedHotelId={selectedHotel?.hotel_id}
               />
-              {selectedDestination?.name && (
-                <p className="mt-3 text-sm text-primary">Selected: {selectedDestination.name}</p>
-              )}
             </div>
 
             <div className="rounded-2xl border border-white/20 bg-white/10 p-6 backdrop-blur-md">
-              <h3 className="mb-4 text-2xl font-bold">Admin Added Hotels</h3>
+              <h3 className="mb-4 text-2xl font-bold">
+                {hasSearchLocation ? 'Hotels Near Your Search Location' : 'Search for a Location'}
+              </h3>
+              <p className="mb-4 text-white/70 text-sm">
+                {hasSearchLocation 
+                  ? `Showing hotels matching: ${selectedDestination.address}`
+                  : 'Use the search box above to find hotels near a destination.'}
+              </p>
               {featuredHotelsLoading ? (
-                <p className="text-white/80">Loading admin-added hotels...</p>
-              ) : featuredHotels.length === 0 ? (
-                <p className="text-white/80">No admin-added hotels yet.</p>
+                <p className="text-white/80">Loading hotels...</p>
+              ) : hasSearchLocation && filteredFeaturedHotels.length === 0 ? (
+                <p className="text-white/80">No hotels found matching your search location. Try searching for a different area.</p>
               ) : (
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {featuredHotels.map((hotel) => (
-                    <HotelCard
-                      key={`featured-${hotel.hotel_id}`}
-                      hotel={hotel}
-                      onSelect={handleSelectHotel}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="rounded-2xl border border-white/20 bg-white/10 p-6 backdrop-blur-md">
-              <h3 className="mb-4 text-2xl font-bold">Nearby Hotels</h3>
-              {hotelsLoading ? (
-                <p className="text-white/80">Loading nearby hotels...</p>
-              ) : nearbyHotels.length === 0 ? (
-                <p className="text-white/80">No nearby hotels yet. Select a destination on map.</p>
-              ) : (
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {nearbyHotels.map((hotel) => (
-                    <HotelCard
-                      key={hotel.place_id || hotel.hotel_id}
-                      hotel={hotel}
-                      onSelect={handleSelectHotel}
-                    />
-                  ))}
-                </div>
+                hasSearchLocation ? (
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {filteredFeaturedHotels.map((hotel) => (
+                      <HotelCard
+                        key={`featured-${hotel.hotel_id}`}
+                        hotel={hotel}
+                        onSelect={handleSelectHotel}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-white/80">Search a location to see nearby hotel cards.</p>
+                )
               )}
             </div>
 
@@ -520,17 +602,73 @@ const HotelsPage = () => {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-white/80">Address</label>
-                <input
-                  type="text"
-                  name="address"
-                  value={adminHotelForm.address}
-                  onChange={handleAdminHotelInput}
-                  placeholder="Enter hotel address"
-                  className="mt-1 w-full rounded-md border border-white/20 bg-black/30 px-3 py-2 text-white"
-                  required
-                />
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-white/80">Local Address</label>
+                  <input
+                    type="text"
+                    name="local_address"
+                    value={adminHotelForm.local_address}
+                    onChange={handleAdminHotelInput}
+                    placeholder="Street, area, landmark"
+                    className="mt-1 w-full rounded-md border border-white/20 bg-black/30 px-3 py-2 text-white"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-white/80">State</label>
+                  <input
+                    type="text"
+                    name="state"
+                    value={adminHotelForm.state}
+                    onChange={handleAdminHotelInput}
+                    placeholder="State"
+                    className="mt-1 w-full rounded-md border border-white/20 bg-black/30 px-3 py-2 text-white"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-white/80">PIN Code</label>
+                  <input
+                    type="text"
+                    name="pin_code"
+                    value={adminHotelForm.pin_code}
+                    onChange={handleAdminHotelInput}
+                    placeholder="PIN code"
+                    className="mt-1 w-full rounded-md border border-white/20 bg-black/30 px-3 py-2 text-white"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-white/80">Country</label>
+                  <select
+                    name="country"
+                    value={adminHotelForm.country}
+                    onChange={handleAdminHotelInput}
+                    className="mt-1 w-full rounded-md border border-white/20 bg-black/30 px-3 py-2 text-white"
+                    required
+                  >
+                    <option value="">Select country</option>
+                    {COUNTRY_OPTIONS.map((country) => (
+                      <option key={country.value} value={country.value}>
+                        {country.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-white/10 bg-black/20 p-3 text-sm text-white/75">
+                <span className="font-semibold text-white">Preview address: </span>
+                {buildDisplayAddress({
+                  local_address: adminHotelForm.local_address,
+                  state: adminHotelForm.state,
+                  pin_code: adminHotelForm.pin_code,
+                  country: getCountryLabel(adminHotelForm.country),
+                }) || 'Add the address fields above'}
               </div>
 
               <div>
@@ -541,18 +679,6 @@ const HotelsPage = () => {
                   onChange={(e) => {
                     setAdminHotelImageFile(e.target.files?.[0] || null);
                   }}
-                  className="mt-1 w-full rounded-md border border-white/20 bg-black/30 px-3 py-2 text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-white/80">Hotel URL</label>
-                <input
-                  type="url"
-                  name="hotel_url"
-                  value={adminHotelForm.hotel_url}
-                  onChange={handleAdminHotelInput}
-                  placeholder="https://example.com/hotel"
                   className="mt-1 w-full rounded-md border border-white/20 bg-black/30 px-3 py-2 text-white"
                 />
               </div>
@@ -593,7 +719,7 @@ const HotelsPage = () => {
                   {adminHotels.map((hotel) => (
                     <div key={hotel.hotel_id} className="rounded-md border border-white/15 bg-black/35 p-3">
                       <p className="text-base font-semibold text-white">{hotel.hotel_name}</p>
-                      <p className="mt-1 text-sm text-gray-300">{hotel.address || 'Address not provided'}</p>
+                      <p className="mt-1 text-sm text-gray-300">{buildDisplayAddress(hotel) || 'Address not provided'}</p>
                       {hotel.hotel_image_url && (
                         <img
                           src={resolveHotelImageUrl(hotel.hotel_image_url)}
