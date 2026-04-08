@@ -85,6 +85,8 @@ const HotelsPage = () => {
   const [adminHotelStatus, setAdminHotelStatus] = useState({ type: '', message: '' });
   const [adminHotelForm, setAdminHotelForm] = useState({
     hotel_name: '',
+    price_per_night: '',
+    contact_no: '',
     local_address: '',
     state: '',
     pin_code: '',
@@ -261,7 +263,10 @@ const HotelsPage = () => {
     const pinCode = (adminHotelForm.pin_code || '').trim();
     const countryCode = (adminHotelForm.country || '').trim();
     const country = getCountryLabel(countryCode);
+    const contactNo = (adminHotelForm.contact_no || '').trim();
     const hotelDetails = (adminHotelForm.hotel_details || '').trim();
+    const priceRaw = String(adminHotelForm.price_per_night || '').trim();
+    const parsedPricePerNight = Number(priceRaw);
     const composedAddress = [localAddress, state, pinCode, country].filter(Boolean).join(', ');
 
     if (!hotelName) {
@@ -277,6 +282,14 @@ const HotelsPage = () => {
       return;
     }
 
+    if (priceRaw === '' || !Number.isFinite(parsedPricePerNight) || parsedPricePerNight < 0) {
+      setAdminHotelStatus({
+        type: 'error',
+        message: 'Price per night must be a valid non-negative number.',
+      });
+      return;
+    }
+
     setAdminHotelSubmitting(true);
     setAdminHotelStatus({ type: '', message: '' });
 
@@ -288,7 +301,9 @@ const HotelsPage = () => {
       formData.append('state', state);
       formData.append('pin_code', pinCode);
       formData.append('country', country);
+      formData.append('contact_no', contactNo);
       formData.append('hotel_details', hotelDetails);
+      formData.append('price_per_night', parsedPricePerNight.toFixed(2));
 
       if (adminHotelImageFile) {
         formData.append('hotel_image', adminHotelImageFile);
@@ -307,6 +322,8 @@ const HotelsPage = () => {
 
       setAdminHotelForm({
         hotel_name: '',
+        price_per_night: '',
+        contact_no: '',
         local_address: '',
         state: '',
         pin_code: '',
@@ -602,6 +619,33 @@ const HotelsPage = () => {
                 />
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-white/80">Price Per Night</label>
+                <input
+                  type="number"
+                  name="price_per_night"
+                  value={adminHotelForm.price_per_night}
+                  onChange={handleAdminHotelInput}
+                  min="0"
+                  step="0.01"
+                  placeholder="Enter price"
+                  className="mt-1 w-full rounded-md border border-white/20 bg-black/30 px-3 py-2 text-white"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-white/80">Contact Number</label>
+                <input
+                  type="text"
+                  name="contact_no"
+                  value={adminHotelForm.contact_no}
+                  onChange={handleAdminHotelInput}
+                  placeholder="Enter contact number"
+                  className="mt-1 w-full rounded-md border border-white/20 bg-black/30 px-3 py-2 text-white"
+                />
+              </div>
+
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                   <label className="block text-sm font-medium text-white/80">Local Address</label>
@@ -719,6 +763,8 @@ const HotelsPage = () => {
                   {adminHotels.map((hotel) => (
                     <div key={hotel.hotel_id} className="rounded-md border border-white/15 bg-black/35 p-3">
                       <p className="text-base font-semibold text-white">{hotel.hotel_name}</p>
+                      <p className="mt-1 text-sm font-medium text-emerald-300">Price per night: ${Number(hotel?.price_per_night || 0).toFixed(2)}</p>
+                      {hotel.contact_no && <p className="mt-1 text-sm text-gray-300">Contact: {hotel.contact_no}</p>}
                       <p className="mt-1 text-sm text-gray-300">{buildDisplayAddress(hotel) || 'Address not provided'}</p>
                       {hotel.hotel_image_url && (
                         <img

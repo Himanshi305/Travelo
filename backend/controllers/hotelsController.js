@@ -91,6 +91,8 @@ const isMissingColumnError = (error, columnName) => {
 };
 
 const isMissingCreatedByColumnError = (error) => isMissingColumnError(error, 'created_by');
+const isMissingPricePerNightColumnError = (error) => isMissingColumnError(error, 'price_per_night');
+const isMissingContactNoColumnError = (error) => isMissingColumnError(error, 'contact_no');
 
 const isSchemaMismatchError = (error) => {
   const code = String(error?.code || '');
@@ -744,6 +746,8 @@ export const createAdminHotel = async (req, res) => {
     pin_code = '',
     country = '',
     hotel_image_url = '',
+    price_per_night = 0,
+    contact_no = '',
   } = req.body;
   const trimmedName = String(hotel_name || '').trim();
   const trimmedUrl = String(hotel_url || '').trim();
@@ -759,6 +763,8 @@ export const createAdminHotel = async (req, res) => {
   const trimmedState = toTrimmedString(state);
   const trimmedPinCode = toTrimmedString(pin_code);
   const trimmedCountry = toTrimmedString(country);
+  const trimmedContactNo = toTrimmedString(contact_no);
+  const numericPricePerNight = Number(price_per_night);
   const uploadedImagePath = req.file?.path ? String(req.file.path).trim() : '';
   if (req.file && !uploadedImagePath) {
     return res.status(500).json({
@@ -775,6 +781,13 @@ export const createAdminHotel = async (req, res) => {
     });
   }
 
+  if (!Number.isFinite(numericPricePerNight) || numericPricePerNight < 0) {
+    return res.status(400).json({
+      success: false,
+      error: 'price_per_night must be a valid non-negative number.',
+    });
+  }
+
   const payload = {
     hotel_id: makeAdminHotelId(trimmedName),
     hotel_name: trimmedName,
@@ -783,6 +796,8 @@ export const createAdminHotel = async (req, res) => {
     rating: 0,
     hotel_url: trimmedUrl,
     hotel_details: trimmedDetails,
+    price_per_night: Number(numericPricePerNight.toFixed(2)),
+    contact_no: trimmedContactNo,
     local_address: trimmedLocalAddress,
     state: trimmedState,
     pin_code: trimmedPinCode,
@@ -808,10 +823,20 @@ export const createAdminHotel = async (req, res) => {
         rating: payload.rating,
         hotel_url: payload.hotel_url,
         hotel_details: payload.hotel_details,
+        price_per_night: payload.price_per_night,
+        contact_no: payload.contact_no,
       };
 
       if (isMissingColumnError(error, 'full_address')) {
         delete fallbackPayload.full_address;
+      }
+
+      if (isMissingPricePerNightColumnError(error)) {
+        delete fallbackPayload.price_per_night;
+      }
+
+      if (isMissingContactNoColumnError(error)) {
+        delete fallbackPayload.contact_no;
       }
 
       if (!isMissingCreatedByColumnError(error)) {
