@@ -1,13 +1,5 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
--- =====================================================
--- Clean Supabase/PostgreSQL schema for hotel reviews/bookings
--- =====================================================
--- Notes:
--- 1) This script is destructive (DROP + CREATE).
--- 2) It keeps auth ownership in Supabase via auth.users foreign keys.
--- 3) hotel_id is TEXT everywhere to support Google Place IDs.
-
 DROP TABLE IF EXISTS "Review_Master" CASCADE;
 DROP TABLE IF EXISTS review_master CASCADE;
 DROP TABLE IF EXISTS booking_details CASCADE;
@@ -36,7 +28,7 @@ CREATE TABLE "Hotel_Master" (
   state VARCHAR(120) DEFAULT '',
   pin_code VARCHAR(20) DEFAULT '',
   country VARCHAR(120) DEFAULT '',
-  price_per_night NUMERIC(10, 2) DEFAULT 0 CHECK (price_per_night >= 0),
+  price_per_night FLOAT(10, 2) DEFAULT 0 CHECK (price_per_night >= 0),
   contact_no VARCHAR(30) DEFAULT '',
   rating NUMERIC(2, 1) DEFAULT 0 CHECK (rating >= 0 AND rating <= 5),
   hotel_url TEXT DEFAULT '',

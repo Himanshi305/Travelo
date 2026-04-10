@@ -16,12 +16,28 @@ import { uploadHotelImage } from '../middleware/upload.js';
 
 const router = express.Router();
 
+const handleAdminHotelMultipart = (req, res, next) => {
+  // Parse multipart/form-data (file + text fields) and surface multer errors consistently.
+  uploadHotelImage.single('hotel_image')(req, res, (err) => {
+    if (err) {
+      console.error('[createAdminHotel:multer] Multipart parse/upload error:', err.message);
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid multipart/form-data payload.',
+        details: err.message,
+      });
+    }
+
+    return next();
+  });
+};
+
 router.get('/nearby', auth, getNearbyHotels);
 router.get('/', auth, getAllHotels);
 router.get('/featured', auth, getAdminHotelsForUsers);
 router.post('/', auth, createHotel);
 router.get('/admin', auth, isAdmin, getAdminHotels);
-router.post('/admin', auth, isAdmin, uploadHotelImage.single('hotel_image'), createAdminHotel);
+router.post('/admin', auth, isAdmin, handleAdminHotelMultipart, createAdminHotel);
 router.delete('/admin/:hotelId', auth, isAdmin, deleteAdminHotel);
 router.get('/:hotelId/reviews', auth, getHotelReviews);
 router.post('/:hotelId/reviews', auth, createHotelReview);

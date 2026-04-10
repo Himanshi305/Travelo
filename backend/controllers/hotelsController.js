@@ -1,129 +1,184 @@
-import axios from 'axios';
-import supabase from '../config/supabase.js';
+import axios from "axios";
+import supabase from "../config/supabase.js";
 
 const normalizeGoogleHotel = (hotelData) => ({
   hotel_id: hotelData.place_id ? String(hotelData.place_id) : null,
   place_id: hotelData.place_id ? String(hotelData.place_id) : null,
-  hotel_name: hotelData.name || 'Unnamed hotel',
-  address: hotelData.vicinity || hotelData.formatted_address || '',
+  hotel_name: hotelData.name || "Unnamed hotel",
+  address: hotelData.vicinity || hotelData.formatted_address || "",
   rating: Number(hotelData.rating || 0),
   price_per_night: 0,
-  contact_no: '',
-  hotel_url: '',
-  hotel_details: '',
+  contact_no: "",
+  hotel_url: "",
+  hotel_details: "",
   photo_reference: hotelData.photos?.[0]?.photo_reference || null,
   lat: hotelData.geometry?.location?.lat || null,
   lng: hotelData.geometry?.location?.lng || null,
 });
 
 const makeAdminHotelId = (hotelName) => {
-  const base = String(hotelName || 'hotel')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40) || 'hotel';
+  const base =
+    String(hotelName || "hotel")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 40) || "hotel";
 
   return `admin_${Date.now()}_${base}`;
 };
 
-const toTrimmedString = (value) => String(value || '').trim();
+const toTrimmedString = (value) => String(value || "").trim();
 
-const buildAdminHotelAddress = ({ local_address, state, pin_code, country, address }) => {
+const readRequestField = (body, keys, fallback = "") => {
+  const keyList = Array.isArray(keys) ? keys : [keys];
+
+  for (const key of keyList) {
+    const rawValue = body?.[key];
+
+    if (Array.isArray(rawValue)) {
+      const firstValue = rawValue.find(
+        (entry) => entry !== undefined && entry !== null && String(entry).trim() !== "",
+      );
+      if (firstValue !== undefined) {
+        return firstValue;
+      }
+      continue;
+    }
+
+    if (
+      rawValue !== undefined &&
+      rawValue !== null &&
+      String(rawValue).trim() !== ""
+    ) {
+      return rawValue;
+    }
+  }
+
+  return fallback;
+};
+
+const parseIntegerPricePerNight = (value) => {
+  if (value === "" || value === null || value === undefined) {
+    return { isValid: false, amount: 0 };
+  }
+
+  const numericValue = Number(value);
+
+  if (!Number.isFinite(numericValue) || numericValue < 0) {
+    return { isValid: false, amount: 0 };
+  }
+
+  return {
+    isValid: true,
+    amount: Math.trunc(numericValue),
+  };
+};
+
+const buildAdminHotelAddress = ({
+  local_address,
+  state,
+  pin_code,
+  country,
+  address,
+}) => {
   const addressParts = [local_address, state, pin_code, country]
     .map(toTrimmedString)
     .filter(Boolean);
 
   if (addressParts.length > 0) {
-    return addressParts.join(', ');
+    return addressParts.join(", ");
   }
 
   return toTrimmedString(address);
 };
 
 const isMissingOptionalHotelColumnError = (error) => {
-  const code = String(error?.code || '');
-  const message = String(error?.message || '').toLowerCase();
-  const isColumnMismatch = (
-    code === 'PGRST204'
-    || code === '42703'
-    || code === '42883'
-    || message.includes('schema cache')
-    || message.includes('column')
-  );
+  const code = String(error?.code || "");
+  const message = String(error?.message || "").toLowerCase();
+  const isColumnMismatch =
+    code === "PGRST204" ||
+    code === "42703" ||
+    code === "42883" ||
+    message.includes("schema cache") ||
+    message.includes("column");
 
   return (
-    isColumnMismatch
-    && [
-      'created_by',
-      'hotel_image_url',
-      'full_address',
-      'local_address',
-      'state',
-      'pin_code',
-      'country',
+    isColumnMismatch &&
+    [
+      "created_by",
+      "hotel_image_url",
+      "full_address",
+      "local_address",
+      "state",
+      "pin_code",
+      "country",
     ].some((columnName) => message.includes(columnName))
   );
 };
 
 const isMissingFullAddressFieldInTriggerError = (error) => {
-  const message = String(error?.message || '').toLowerCase();
+  const message = String(error?.message || "").toLowerCase();
   return message.includes('record "new" has no field "full_address"');
 };
 
 const isMissingColumnError = (error, columnName) => {
-  const code = String(error?.code || '');
-  const message = String(error?.message || '').toLowerCase();
-  const normalizedColumnName = String(columnName || '').toLowerCase();
+  const code = String(error?.code || "");
+  const message = String(error?.message || "").toLowerCase();
+  const normalizedColumnName = String(columnName || "").toLowerCase();
 
   if (!normalizedColumnName) {
     return false;
   }
 
-  const isColumnMismatch = (
-    code === 'PGRST204'
-    || code === '42703'
-    || code === '42883'
-    || message.includes('schema cache')
-    || message.includes('column')
-  );
+  const isColumnMismatch =
+    code === "PGRST204" ||
+    code === "42703" ||
+    code === "42883" ||
+    message.includes("schema cache") ||
+    message.includes("column");
 
   return isColumnMismatch && message.includes(normalizedColumnName);
 };
 
-const isMissingCreatedByColumnError = (error) => isMissingColumnError(error, 'created_by');
-const isMissingPricePerNightColumnError = (error) => isMissingColumnError(error, 'price_per_night');
-const isMissingContactNoColumnError = (error) => isMissingColumnError(error, 'contact_no');
+const isMissingCreatedByColumnError = (error) =>
+  isMissingColumnError(error, "created_by");
+const isMissingContactNoColumnError = (error) =>
+  isMissingColumnError(error, "contact_no");
 
 const isSchemaMismatchError = (error) => {
-  const code = String(error?.code || '');
-  const message = String(error?.message || '').toLowerCase();
+  const code = String(error?.code || "");
+  const message = String(error?.message || "").toLowerCase();
 
   return (
-    code === 'PGRST204'
-    || code === '42703'
-    || code === '42883'
-    || message.includes('schema cache')
-    || message.includes('column')
-    || message.includes('operator does not exist')
+    code === "PGRST204" ||
+    code === "42703" ||
+    code === "42883" ||
+    message.includes("schema cache") ||
+    message.includes("column") ||
+    message.includes("operator does not exist")
   );
 };
 
 const isMissingReviewReplyTableError = (error) => {
-  const code = String(error?.code || '');
-  const message = String(error?.message || '').toLowerCase();
+  const code = String(error?.code || "");
+  const message = String(error?.message || "").toLowerCase();
 
-  return code === '42P01' || message.includes('review_reply');
+  return code === "42P01" || message.includes("review_reply");
 };
 
-const normalizeSearchText = (value) => String(value || '').trim().toLowerCase();
+const normalizeSearchText = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase();
 
 const parseLocationQuery = ({ address, state, country }) => {
-  const addressParts = String(address || '')
-    .split(',')
+  const addressParts = String(address || "")
+    .split(",")
     .map((part) => normalizeSearchText(part))
     .filter(Boolean);
 
-  const searchCountry = normalizeSearchText(country) || addressParts[addressParts.length - 1] || '';
+  const searchCountry =
+    normalizeSearchText(country) || addressParts[addressParts.length - 1] || "";
   const locationTerms = [
     normalizeSearchText(state),
     ...addressParts.slice(0, -1),
@@ -153,7 +208,7 @@ const hotelMatchesLocation = (hotel, location) => {
   ]
     .map(normalizeSearchText)
     .filter(Boolean)
-    .join(' ');
+    .join(" ");
 
   const countryMatch = hotelLocationBlob.includes(searchCountry);
 
@@ -174,10 +229,12 @@ const fetchReviewRepliesMap = async (reviewIds) => {
   }
 
   const { data, error } = await supabase
-    .from('review_reply')
-    .select('reply_id, review_id, hotel_id, admin_user_id, reply_text, created_at')
-    .in('review_id', reviewIds)
-    .order('created_at', { ascending: true });
+    .from("review_reply")
+    .select(
+      "reply_id, review_id, hotel_id, admin_user_id, reply_text, created_at",
+    )
+    .in("review_id", reviewIds)
+    .order("created_at", { ascending: true });
 
   if (error) {
     if (isMissingReviewReplyTableError(error)) {
@@ -205,11 +262,16 @@ const fetchReviewRepliesMap = async (reviewIds) => {
 const saveHotel = async (hotelData) => {
   const normalizedHotel = normalizeGoogleHotel(hotelData);
   if (!normalizedHotel.hotel_id) {
-    console.warn('[saveHotel] Skipping hotel with missing place_id:', normalizedHotel.hotel_name);
+    console.warn(
+      "[saveHotel] Skipping hotel with missing place_id:",
+      normalizedHotel.hotel_name,
+    );
     return null;
   }
 
-  console.log(`[saveHotel] Processing: "${normalizedHotel.hotel_name}" at "${normalizedHotel.address}"`);
+  console.log(
+    `[saveHotel] Processing: "${normalizedHotel.hotel_name}" at "${normalizedHotel.address}"`,
+  );
 
   const payload = {
     hotel_id: normalizedHotel.hotel_id,
@@ -219,17 +281,22 @@ const saveHotel = async (hotelData) => {
   };
 
   const { data, error } = await supabase
-    .from('Hotel_Master')
-    .upsert(payload, { onConflict: 'hotel_id' })
-    .select('*')
+    .from("Hotel_Master")
+    .upsert(payload, { onConflict: "hotel_id" })
+    .select("*")
     .single();
 
   if (error) {
-    console.error(`[saveHotel] Error upserting "${normalizedHotel.hotel_name}" to Supabase:`, error);
+    console.error(
+      `[saveHotel] Error upserting "${normalizedHotel.hotel_name}" to Supabase:`,
+      error,
+    );
     return null;
   }
 
-  console.log(`[saveHotel] Upserted hotel: "${normalizedHotel.hotel_name}" with hotel_id ${data.hotel_id}`);
+  console.log(
+    `[saveHotel] Upserted hotel: "${normalizedHotel.hotel_name}" with hotel_id ${data.hotel_id}`,
+  );
   return {
     ...normalizedHotel,
     ...data,
@@ -243,67 +310,105 @@ export const getNearbyHotels = async (req, res) => {
   const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
   const { lat, lng } = req.query;
 
-  console.log(`\n[getNearbyHotels] Request received — lat: ${lat}, lng: ${lng}`);
-  console.log(`[getNearbyHotels] GOOGLE_PLACES_API_KEY is ${GOOGLE_PLACES_API_KEY ? 'SET ✓' : 'MISSING ✗'}`);
+  console.log(
+    `\n[getNearbyHotels] Request received — lat: ${lat}, lng: ${lng}`,
+  );
+  console.log(
+    `[getNearbyHotels] GOOGLE_PLACES_API_KEY is ${GOOGLE_PLACES_API_KEY ? "SET ✓" : "MISSING ✗"}`,
+  );
 
   if (!lat || !lng) {
-    return res.status(400).json({ error: 'Latitude and longitude are required.' });
+    return res
+      .status(400)
+      .json({ error: "Latitude and longitude are required." });
   }
 
   if (!GOOGLE_PLACES_API_KEY) {
-    return res.status(500).json({ error: 'GOOGLE_PLACES_API_KEY is missing on the backend.' });
+    return res
+      .status(500)
+      .json({ error: "GOOGLE_PLACES_API_KEY is missing on the backend." });
   }
 
   console.log(`[getNearbyHotels] Calling Google Places API...`);
 
   try {
-    const response = await axios.get('https://maps.googleapis.com/maps/api/place/nearbysearch/json', {
-      params: {
-        location: `${lat},${lng}`,
-        radius: 5000,
-        type: 'lodging',
-        key: GOOGLE_PLACES_API_KEY,
+    const response = await axios.get(
+      "https://maps.googleapis.com/maps/api/place/nearbysearch/json",
+      {
+        params: {
+          location: `${lat},${lng}`,
+          radius: 5000,
+          type: "lodging",
+          key: GOOGLE_PLACES_API_KEY,
+        },
       },
-    });
+    );
     const googleStatus = response.data.status;
     const places = response.data.results || [];
 
     console.log(`[getNearbyHotels] Google API status: ${googleStatus}`);
-    console.log('[getNearbyHotels] Raw Google API response:', JSON.stringify(response.data, null, 2));
-    console.log(`[getNearbyHotels] Places returned by Google: ${places.length}`);
+    console.log(
+      "[getNearbyHotels] Raw Google API response:",
+      JSON.stringify(response.data, null, 2),
+    );
+    console.log(
+      `[getNearbyHotels] Places returned by Google: ${places.length}`,
+    );
 
-    if (googleStatus === 'REQUEST_DENIED') {
-      console.error('[getNearbyHotels] REQUEST_DENIED — API key may be invalid or missing billing.');
-      return res.status(403).json({ error: 'Google Places API request was denied. Check your API key and billing.' });
+    if (googleStatus === "REQUEST_DENIED") {
+      console.error(
+        "[getNearbyHotels] REQUEST_DENIED — API key may be invalid or missing billing.",
+      );
+      return res.status(403).json({
+        error:
+          "Google Places API request was denied. Check your API key and billing.",
+      });
     }
 
-    if (googleStatus === 'INVALID_REQUEST') {
-      console.error('[getNearbyHotels] INVALID_REQUEST — Bad parameters sent to Google API.');
-      return res.status(400).json({ error: 'Invalid request sent to Google Places API.' });
+    if (googleStatus === "INVALID_REQUEST") {
+      console.error(
+        "[getNearbyHotels] INVALID_REQUEST — Bad parameters sent to Google API.",
+      );
+      return res
+        .status(400)
+        .json({ error: "Invalid request sent to Google Places API." });
     }
 
-    if (googleStatus === 'ZERO_RESULTS') {
-      console.warn('[getNearbyHotels] ZERO_RESULTS — No hotels found near these coordinates.');
+    if (googleStatus === "ZERO_RESULTS") {
+      console.warn(
+        "[getNearbyHotels] ZERO_RESULTS — No hotels found near these coordinates.",
+      );
       return res.json([]);
     }
 
-    if (googleStatus !== 'OK') {
-      console.error(`[getNearbyHotels] Unexpected Google status: ${googleStatus}`, response.data.error_message || '');
-      return res.status(500).json({ error: `Unexpected Google API status: ${googleStatus}` });
+    if (googleStatus !== "OK") {
+      console.error(
+        `[getNearbyHotels] Unexpected Google status: ${googleStatus}`,
+        response.data.error_message || "",
+      );
+      return res
+        .status(500)
+        .json({ error: `Unexpected Google API status: ${googleStatus}` });
     }
 
     const normalizedHotels = places.map(normalizeGoogleHotel);
 
     places.forEach((p, i) => {
-      console.log(`[getNearbyHotels] Place ${i + 1}: "${p.name}" — rating: ${p.rating ?? 'N/A'}, vicinity: "${p.vicinity}"`);
+      console.log(
+        `[getNearbyHotels] Place ${i + 1}: "${p.name}" — rating: ${p.rating ?? "N/A"}, vicinity: "${p.vicinity}"`,
+      );
     });
 
-    const savedHotels = await Promise.all(places.map((hotel) => saveHotel(hotel)));
+    const savedHotels = await Promise.all(
+      places.map((hotel) => saveHotel(hotel)),
+    );
     const responseHotels = normalizedHotels.map((hotel, index) => {
       const savedHotel = savedHotels[index];
 
       if (savedHotel === null) {
-        console.warn(`[getNearbyHotels] Returning Google result without DB save: "${hotel.hotel_name}"`);
+        console.warn(
+          `[getNearbyHotels] Returning Google result without DB save: "${hotel.hotel_name}"`,
+        );
         return hotel;
       }
 
@@ -315,13 +420,21 @@ export const getNearbyHotels = async (req, res) => {
       };
     });
 
-    console.log(`[getNearbyHotels] Returning ${responseHotels.length} hotels to client.`);
-    console.log('[getNearbyHotels] Returning hotel names:', responseHotels.map((hotel) => hotel.hotel_name));
+    console.log(
+      `[getNearbyHotels] Returning ${responseHotels.length} hotels to client.`,
+    );
+    console.log(
+      "[getNearbyHotels] Returning hotel names:",
+      responseHotels.map((hotel) => hotel.hotel_name),
+    );
     res.json(responseHotels);
   } catch (error) {
-    console.error('[getNearbyHotels] Error fetching nearby hotels from Google:', error.message);
+    console.error(
+      "[getNearbyHotels] Error fetching nearby hotels from Google:",
+      error.message,
+    );
     res.status(500).json({
-      error: 'Server error while fetching nearby hotels.',
+      error: "Server error while fetching nearby hotels.",
       details: error.message,
     });
   }
@@ -332,50 +445,51 @@ export const getAllHotels = async (req, res) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ error: "Unauthorized" });
     }
 
     const { data: userBookings, error: bookingError } = await supabase
-      .from('booking_details')
-      .select('hotel_id')
-      .eq('user_id', userId);
+      .from("booking_details")
+      .select("hotel_id")
+      .eq("user_id", userId);
 
     if (bookingError) {
       throw bookingError;
     }
 
-    const userHotelIds = [...new Set((userBookings || []).map((b) => String(b.hotel_id).trim()).filter(Boolean))];
+    const userHotelIds = [
+      ...new Set(
+        (userBookings || [])
+          .map((b) => String(b.hotel_id).trim())
+          .filter(Boolean),
+      ),
+    ];
 
     if (userHotelIds.length === 0) {
       return res.json([]);
     }
 
     const { data, error } = await supabase
-      .from('Hotel_Master')
-      .select('*')
-      .in('hotel_id', userHotelIds);
+      .from("Hotel_Master")
+      .select("*")
+      .in("hotel_id", userHotelIds);
 
     if (error) throw error;
     res.json(data || []);
   } catch (err) {
     console.error(err);
-    res.status(500).send('Server error');
+    res.status(500).send("Server error");
   }
 };
 
 // POST a new hotel to our database
 export const createHotel = async (req, res) => {
-  const {
-    place_id,
-    hotel_name,
-    address,
-    rating = 0,
-  } = req.body;
+  const { place_id, hotel_name, address, rating = 0 } = req.body;
 
   if (!place_id || !hotel_name || !address) {
     return res.status(400).json({
       success: false,
-      error: 'place_id, hotel_name and address are required.',
+      error: "place_id, hotel_name and address are required.",
     });
   }
 
@@ -390,31 +504,31 @@ export const createHotel = async (req, res) => {
     };
 
     const { data, error } = await supabase
-      .from('Hotel_Master')
-      .upsert(payload, { onConflict: 'hotel_id' })
-      .select('*')
+      .from("Hotel_Master")
+      .upsert(payload, { onConflict: "hotel_id" })
+      .select("*")
       .single();
 
     if (error) {
-      console.error('[createHotel] Supabase upsert error:', error);
+      console.error("[createHotel] Supabase upsert error:", error);
       return res.status(500).json({
         success: false,
-        error: 'Failed to save hotel.',
+        error: "Failed to save hotel.",
         details: error.message,
       });
     }
 
     return res.status(200).json({
       success: true,
-      message: 'Hotel saved successfully.',
+      message: "Hotel saved successfully.",
       mapped_hotel_id: hotelId,
       hotel: data,
     });
   } catch (err) {
-    console.error('[createHotel] Unexpected error:', err);
+    console.error("[createHotel] Unexpected error:", err);
     return res.status(500).json({
       success: false,
-      error: 'Server error while saving hotel.',
+      error: "Server error while saving hotel.",
       details: err.message,
     });
   }
@@ -425,26 +539,30 @@ export const getHotelReviews = async (req, res) => {
   const { hotelId } = req.params;
 
   if (!hotelId) {
-    return res.status(400).json({ error: 'hotelId is required.' });
+    return res.status(400).json({ error: "hotelId is required." });
   }
 
   try {
     const { data, error } = await supabase
-      .from('review_master')
-      .select('review_id, hotel_id, user_id, user_email, comment, star, created_at')
-      .eq('hotel_id', String(hotelId).trim())
-      .order('created_at', { ascending: false });
+      .from("review_master")
+      .select(
+        "review_id, hotel_id, user_id, user_email, comment, star, created_at",
+      )
+      .eq("hotel_id", String(hotelId).trim())
+      .order("created_at", { ascending: false });
 
     if (error) {
-      console.error('[getHotelReviews] Supabase query error:', error);
+      console.error("[getHotelReviews] Supabase query error:", error);
       return res.status(500).json({
         success: false,
-        error: 'Failed to fetch hotel reviews.',
+        error: "Failed to fetch hotel reviews.",
         details: error.message,
       });
     }
 
-    const reviewIds = (data || []).map((review) => review.review_id).filter(Boolean);
+    const reviewIds = (data || [])
+      .map((review) => review.review_id)
+      .filter(Boolean);
     const replyMap = await fetchReviewRepliesMap(reviewIds);
     const reviewsWithReplies = (data || []).map((review) => ({
       ...review,
@@ -456,20 +574,25 @@ export const getHotelReviews = async (req, res) => {
       reviews: reviewsWithReplies,
     });
   } catch (err) {
-    console.error('[getHotelReviews] Unexpected error:', err);
+    console.error("[getHotelReviews] Unexpected error:", err);
     return res.status(500).json({
       success: false,
-      error: 'Server error while fetching reviews.',
+      error: "Server error while fetching reviews.",
       details: err.message,
     });
   }
 };
 
-const ensureHotelExistsForReview = async ({ hotelId, hotelName, address, rating }) => {
+const ensureHotelExistsForReview = async ({
+  hotelId,
+  hotelName,
+  address,
+  rating,
+}) => {
   const { data: existingHotel, error: existingHotelError } = await supabase
-    .from('Hotel_Master')
-    .select('hotel_id')
-    .eq('hotel_id', hotelId)
+    .from("Hotel_Master")
+    .select("hotel_id")
+    .eq("hotel_id", hotelId)
     .maybeSingle();
 
   if (existingHotelError) {
@@ -481,7 +604,9 @@ const ensureHotelExistsForReview = async ({ hotelId, hotelName, address, rating 
   }
 
   if (!hotelName || !address) {
-    const missingHotelError = new Error('Hotel record is missing. Include hotel_name and address when submitting a review.');
+    const missingHotelError = new Error(
+      "Hotel record is missing. Include hotel_name and address when submitting a review.",
+    );
     missingHotelError.statusCode = 400;
     throw missingHotelError;
   }
@@ -494,9 +619,9 @@ const ensureHotelExistsForReview = async ({ hotelId, hotelName, address, rating 
   };
 
   const { error } = await supabase
-    .from('Hotel_Master')
-    .upsert(payload, { onConflict: 'hotel_id' })
-    .select('hotel_id')
+    .from("Hotel_Master")
+    .upsert(payload, { onConflict: "hotel_id" })
+    .select("hotel_id")
     .single();
 
   if (error) {
@@ -505,15 +630,15 @@ const ensureHotelExistsForReview = async ({ hotelId, hotelName, address, rating 
 };
 
 const recomputeAndUpdateHotelRating = async (hotelId) => {
-  const normalizedHotelId = String(hotelId || '').trim();
+  const normalizedHotelId = String(hotelId || "").trim();
   if (!normalizedHotelId) {
     return null;
   }
 
   const { data: reviews, error: reviewsError } = await supabase
-    .from('review_master')
-    .select('star')
-    .eq('hotel_id', normalizedHotelId);
+    .from("review_master")
+    .select("star")
+    .eq("hotel_id", normalizedHotelId);
 
   if (reviewsError) {
     throw reviewsError;
@@ -524,13 +649,17 @@ const recomputeAndUpdateHotelRating = async (hotelId) => {
     .filter((value) => Number.isFinite(value) && value >= 1 && value <= 5);
 
   const averageRating = stars.length
-    ? Number((stars.reduce((sum, value) => sum + value, 0) / stars.length).toFixed(1))
+    ? Number(
+        (stars.reduce((sum, value) => sum + value, 0) / stars.length).toFixed(
+          1,
+        ),
+      )
     : 0;
 
   const { error: updateError } = await supabase
-    .from('Hotel_Master')
+    .from("Hotel_Master")
     .update({ rating: averageRating })
-    .eq('hotel_id', normalizedHotelId);
+    .eq("hotel_id", normalizedHotelId);
 
   if (updateError) {
     throw updateError;
@@ -547,31 +676,38 @@ export const createHotelReview = async (req, res) => {
   const { comment, star, hotel_name: hotelName, address, rating } = req.body;
 
   if (!userId) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const normalizedHotelId = String(hotelId || '').trim();
+  const normalizedHotelId = String(hotelId || "").trim();
 
   if (!normalizedHotelId) {
-    return res.status(400).json({ success: false, error: 'hotelId is required.' });
+    return res
+      .status(400)
+      .json({ success: false, error: "hotelId is required." });
   }
 
-  const sanitizedComment = String(comment || '').trim();
+  const sanitizedComment = String(comment || "").trim();
   const numericStar = Number(star);
 
   if (!sanitizedComment) {
-    return res.status(400).json({ success: false, error: 'comment is required.' });
+    return res
+      .status(400)
+      .json({ success: false, error: "comment is required." });
   }
 
   if (!Number.isFinite(numericStar) || numericStar < 1 || numericStar > 5) {
-    return res.status(400).json({ success: false, error: 'star must be a number between 1 and 5.' });
+    return res.status(400).json({
+      success: false,
+      error: "star must be a number between 1 and 5.",
+    });
   }
 
   try {
     await ensureHotelExistsForReview({
       hotelId: normalizedHotelId,
-      hotelName: String(hotelName || '').trim(),
-      address: String(address || '').trim(),
+      hotelName: String(hotelName || "").trim(),
+      address: String(address || "").trim(),
       rating,
     });
 
@@ -584,44 +720,51 @@ export const createHotelReview = async (req, res) => {
     };
 
     const { data, error } = await supabase
-      .from('review_master')
+      .from("review_master")
       .insert(payload)
-      .select('review_id, hotel_id, user_id, user_email, comment, star, created_at')
+      .select(
+        "review_id, hotel_id, user_id, user_email, comment, star, created_at",
+      )
       .single();
 
     if (error) {
-      console.error('[createHotelReview] Supabase insert error:', error);
+      console.error("[createHotelReview] Supabase insert error:", error);
 
-      if (error.code === '22001') {
+      if (error.code === "22001") {
         return res.status(400).json({
           success: false,
-          error: 'Schema mismatch for hotel_id column. Ensure hotel_id is TEXT in hotel/review/booking tables.',
+          error:
+            "Schema mismatch for hotel_id column. Ensure hotel_id is TEXT in hotel/review/booking tables.",
           details: error.message,
         });
       }
 
       return res.status(500).json({
         success: false,
-        error: 'Failed to save review.',
+        error: "Failed to save review.",
         details: error.message,
       });
     }
 
     let updatedHotelRating = null;
     try {
-      updatedHotelRating = await recomputeAndUpdateHotelRating(normalizedHotelId);
+      updatedHotelRating =
+        await recomputeAndUpdateHotelRating(normalizedHotelId);
     } catch (ratingError) {
-      console.error('[createHotelReview] Failed to recompute hotel rating:', ratingError);
+      console.error(
+        "[createHotelReview] Failed to recompute hotel rating:",
+        ratingError,
+      );
     }
 
     return res.status(201).json({
       success: true,
-      message: 'Review submitted successfully.',
+      message: "Review submitted successfully.",
       review: data,
       hotel_rating: updatedHotelRating,
     });
   } catch (err) {
-    console.error('[createHotelReview] Unexpected error:', err);
+    console.error("[createHotelReview] Unexpected error:", err);
 
     if (err?.statusCode) {
       return res.status(err.statusCode).json({
@@ -632,7 +775,7 @@ export const createHotelReview = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      error: 'Server error while submitting review.',
+      error: "Server error while submitting review.",
       details: err.message,
     });
   }
@@ -641,41 +784,47 @@ export const createHotelReview = async (req, res) => {
 export const getAdminHotels = async (req, res) => {
   const userId = req.user?.id;
   if (!userId) {
-    return res.status(401).json({ success: false, error: 'Unauthorized' });
+    return res.status(401).json({ success: false, error: "Unauthorized" });
   }
 
   try {
     let { data, error } = await supabase
-      .from('Hotel_Master')
-      .select('*')
-      .eq('created_by', userId)
-      .order('hotel_id', { ascending: false });
+      .from("Hotel_Master")
+      .select("*")
+      .eq("created_by", userId)
+      .order("hotel_id", { ascending: false });
 
     if (error) {
-      console.warn('[getAdminHotels] created_by query failed; trying fallback strategy.', error);
+      console.warn(
+        "[getAdminHotels] created_by query failed; trying fallback strategy.",
+        error,
+      );
       const fallbackResult = await supabase
-        .from('Hotel_Master')
-        .select('*')
-        .order('hotel_id', { ascending: false });
+        .from("Hotel_Master")
+        .select("*")
+        .order("hotel_id", { ascending: false });
 
-      data = (fallbackResult.data || []).filter((hotel) => String(hotel?.hotel_id || '').startsWith('admin_'));
+      data = (fallbackResult.data || []).filter((hotel) =>
+        String(hotel?.hotel_id || "").startsWith("admin_"),
+      );
       error = fallbackResult.error;
     }
 
     if (error) {
-      console.error('[getAdminHotels] Supabase query error:', error);
+      console.error("[getAdminHotels] Supabase query error:", error);
 
       if (isSchemaMismatchError(error)) {
         return res.status(200).json({
           success: true,
           hotels: [],
-          warning: 'Hotel schema mismatch detected. Returning empty admin hotels list.',
+          warning:
+            "Hotel schema mismatch detected. Returning empty admin hotels list.",
         });
       }
 
       return res.status(500).json({
         success: false,
-        error: 'Failed to fetch admin hotels.',
+        error: "Failed to fetch admin hotels.",
         details: error.message,
       });
     }
@@ -685,10 +834,10 @@ export const getAdminHotels = async (req, res) => {
       hotels: data || [],
     });
   } catch (err) {
-    console.error('[getAdminHotels] Unexpected error:', err);
+    console.error("[getAdminHotels] Unexpected error:", err);
     return res.status(500).json({
       success: false,
-      error: 'Server error while fetching admin hotels.',
+      error: "Server error while fetching admin hotels.",
       details: err.message,
     });
   }
@@ -697,22 +846,22 @@ export const getAdminHotels = async (req, res) => {
 export const getAdminHotelsForUsers = async (req, res) => {
   try {
     const { data, error } = await supabase
-      .from('Hotel_Master')
-      .select('*')
-      .order('hotel_id', { ascending: false });
+      .from("Hotel_Master")
+      .select("*")
+      .order("hotel_id", { ascending: false });
 
     if (error) {
-      console.error('[getAdminHotelsForUsers] Supabase query error:', error);
+      console.error("[getAdminHotelsForUsers] Supabase query error:", error);
       return res.status(500).json({
         success: false,
-        error: 'Failed to fetch admin-added hotels.',
+        error: "Failed to fetch admin-added hotels.",
         details: error.message,
       });
     }
 
     const location = parseLocationQuery(req.query || {});
     const hotels = (data || [])
-      .filter((hotel) => String(hotel?.hotel_id || '').startsWith('admin_'))
+      .filter((hotel) => String(hotel?.hotel_id || "").startsWith("admin_"))
       .filter((hotel) => hotelMatchesLocation(hotel, location));
 
     return res.status(200).json({
@@ -720,10 +869,10 @@ export const getAdminHotelsForUsers = async (req, res) => {
       hotels,
     });
   } catch (err) {
-    console.error('[getAdminHotelsForUsers] Unexpected error:', err);
+    console.error("[getAdminHotelsForUsers] Unexpected error:", err);
     return res.status(500).json({
       success: false,
-      error: 'Server error while fetching admin-added hotels.',
+      error: "Server error while fetching admin-added hotels.",
       details: err.message,
     });
   }
@@ -733,25 +882,27 @@ export const createAdminHotel = async (req, res) => {
   const userId = req.user?.id;
 
   if (!userId) {
-    return res.status(401).json({ success: false, error: 'Unauthorized' });
+    return res.status(401).json({ success: false, error: "Unauthorized" });
   }
 
-  const {
-    hotel_name,
-    hotel_url = '',
-    hotel_details = '',
-    address = '',
-    local_address = '',
-    state = '',
-    pin_code = '',
-    country = '',
-    hotel_image_url = '',
-    price_per_night = 0,
-    contact_no = '',
-  } = req.body;
-  const trimmedName = String(hotel_name || '').trim();
-  const trimmedUrl = String(hotel_url || '').trim();
-  const trimmedDetails = String(hotel_details || '').trim();
+  const hotel_name = readRequestField(req.body, "hotel_name", "");
+  const hotel_url = readRequestField(req.body, "hotel_url", "");
+  const hotel_details = readRequestField(req.body, "hotel_details", "");
+  const address = readRequestField(req.body, "address", "");
+  const local_address = readRequestField(req.body, "local_address", "");
+  const state = readRequestField(req.body, "state", "");
+  const pin_code = readRequestField(req.body, "pin_code", "");
+  const country = readRequestField(req.body, "country", "");
+  const hotel_image_url = readRequestField(req.body, "hotel_image_url", "");
+  const rawPricePerNight = readRequestField(
+    req.body,
+    ["price_per_night", "pricePerNight", "price"],
+    "",
+  );
+  const contact_no = readRequestField(req.body, ["contact_no", "contactNo"], "");
+  const trimmedName = String(hotel_name || "").trim();
+  const trimmedUrl = String(hotel_url || "").trim();
+  const trimmedDetails = String(hotel_details || "").trim();
   const trimmedAddress = buildAdminHotelAddress({
     local_address,
     state,
@@ -764,39 +915,49 @@ export const createAdminHotel = async (req, res) => {
   const trimmedPinCode = toTrimmedString(pin_code);
   const trimmedCountry = toTrimmedString(country);
   const trimmedContactNo = toTrimmedString(contact_no);
-  const numericPricePerNight = Number(price_per_night);
-  const uploadedImagePath = req.file?.path ? String(req.file.path).trim() : '';
+  const parsedPrice = parseIntegerPricePerNight(rawPricePerNight);
+
+  console.log("[createAdminHotel] request body keys:", Object.keys(req.body || {}));
+  console.log("[createAdminHotel] price_per_night received:", rawPricePerNight);
+  console.log("[createAdminHotel] integer price_per_night:", parsedPrice);
+
+  const uploadedImagePath = req.file?.path ? String(req.file.path).trim() : "";
   if (req.file && !uploadedImagePath) {
     return res.status(500).json({
       success: false,
-      error: 'Image upload did not return a valid Cloudinary URL.',
+      error: "Image upload did not return a valid Cloudinary URL.",
     });
   }
-  const trimmedImageUrl = uploadedImagePath || String(hotel_image_url || '').trim();
+  const trimmedImageUrl =
+    uploadedImagePath || String(hotel_image_url || "").trim();
 
   if (!trimmedName) {
     return res.status(400).json({
       success: false,
-      error: 'hotel_name is required.',
+      error: "hotel_name is required.",
     });
   }
 
-  if (!Number.isFinite(numericPricePerNight) || numericPricePerNight < 0) {
+  if (!parsedPrice.isValid) {
     return res.status(400).json({
       success: false,
-      error: 'price_per_night must be a valid non-negative number.',
+      error: "price_per_night must be a valid non-negative number.",
     });
+  }
+
+  if (parsedPrice.amount === undefined || parsedPrice.amount === null) {
+    parsedPrice.amount = 0;
   }
 
   const payload = {
     hotel_id: makeAdminHotelId(trimmedName),
     hotel_name: trimmedName,
-    address: trimmedAddress || 'Not provided',
-    full_address: trimmedAddress || 'Not provided',
+    address: trimmedAddress || "Not provided",
+    full_address: trimmedAddress || "Not provided",
     rating: 0,
     hotel_url: trimmedUrl,
     hotel_details: trimmedDetails,
-    price_per_night: Number(numericPricePerNight.toFixed(2)),
+    price_per_night: parsedPrice.amount,
     contact_no: trimmedContactNo,
     local_address: trimmedLocalAddress,
     state: trimmedState,
@@ -806,15 +967,19 @@ export const createAdminHotel = async (req, res) => {
     created_by: userId,
   };
 
+  console.log("[createAdminHotel] insert payload price_per_night:", payload.price_per_night);
+
   try {
     let { data, error } = await supabase
-      .from('Hotel_Master')
+      .from("Hotel_Master")
       .insert(payload)
-      .select('*')
+      .select("*")
       .single();
 
     if (isMissingOptionalHotelColumnError(error)) {
-      console.warn('[createAdminHotel] optional column missing; retrying insert with reduced payload.');
+      console.warn(
+        "[createAdminHotel] optional column missing; retrying insert with reduced payload.",
+      );
       const fallbackPayload = {
         hotel_id: payload.hotel_id,
         hotel_name: payload.hotel_name,
@@ -827,12 +992,8 @@ export const createAdminHotel = async (req, res) => {
         contact_no: payload.contact_no,
       };
 
-      if (isMissingColumnError(error, 'full_address')) {
+      if (isMissingColumnError(error, "full_address")) {
         delete fallbackPayload.full_address;
-      }
-
-      if (isMissingPricePerNightColumnError(error)) {
-        delete fallbackPayload.price_per_night;
       }
 
       if (isMissingContactNoColumnError(error)) {
@@ -844,9 +1005,9 @@ export const createAdminHotel = async (req, res) => {
       }
 
       const fallbackResult = await supabase
-        .from('Hotel_Master')
+        .from("Hotel_Master")
         .insert(fallbackPayload)
-        .select('*')
+        .select("*")
         .single();
 
       data = fallbackResult.data;
@@ -854,37 +1015,59 @@ export const createAdminHotel = async (req, res) => {
     }
 
     if (error) {
-      console.error('[createAdminHotel] Supabase insert error:', error);
+      console.error("[createAdminHotel] Supabase insert error:", error);
 
       if (isMissingFullAddressFieldInTriggerError(error)) {
         return res.status(500).json({
           success: false,
-          error: 'Hotel schema is missing full_address column required by a DB trigger.',
-          details: "Run: ALTER TABLE \"Hotel_Master\" ADD COLUMN IF NOT EXISTS full_address VARCHAR(500) DEFAULT '';",
+          error:
+            "Hotel schema is missing full_address column required by a DB trigger.",
+          details:
+            "Run: ALTER TABLE \"Hotel_Master\" ADD COLUMN IF NOT EXISTS full_address VARCHAR(500) DEFAULT '';",
         });
       }
 
       const detailParts = [error?.message, error?.details, error?.hint]
-        .filter((part) => String(part || '').trim())
+        .filter((part) => String(part || "").trim())
         .map((part) => String(part).trim());
 
       return res.status(500).json({
         success: false,
-        error: 'Failed to save admin hotel.',
-        details: detailParts.join(' | ') || 'Unknown database error.',
+        error: "Failed to save admin hotel.",
+        details: detailParts.join(" | ") || "Unknown database error.",
       });
+    }
+
+    const { data: updatedHotel, error: updatePriceError } = await supabase
+      .from("Hotel_Master")
+      .update({ price_per_night: parsedPrice.amount })
+      .eq("hotel_id", payload.hotel_id)
+      .select("*")
+      .single();
+
+    if (updatePriceError) {
+      console.error(
+        "[createAdminHotel] Failed to force-update price_per_night:",
+        updatePriceError,
+      );
+    } else {
+      data = updatedHotel;
+      console.log(
+        "[createAdminHotel] final stored price_per_night:",
+        data?.price_per_night,
+      );
     }
 
     return res.status(201).json({
       success: true,
-      message: 'Hotel added successfully.',
+      message: "Hotel added successfully.",
       hotel: data,
     });
   } catch (err) {
-    console.error('[createAdminHotel] Unexpected error:', err);
+    console.error("[createAdminHotel] Unexpected error:", err);
     return res.status(500).json({
       success: false,
-      error: 'Server error while saving admin hotel.',
+      error: "Server error while saving admin hotel.",
       details: err.message,
     });
   }
@@ -892,18 +1075,23 @@ export const createAdminHotel = async (req, res) => {
 
 export const deleteAdminHotel = async (req, res) => {
   const userId = req.user?.id;
-  const hotelId = String(req.params?.hotelId || '').trim();
+  const hotelId = String(req.params?.hotelId || "").trim();
 
   if (!userId) {
-    return res.status(401).json({ success: false, error: 'Unauthorized' });
+    return res.status(401).json({ success: false, error: "Unauthorized" });
   }
 
   if (!hotelId) {
-    return res.status(400).json({ success: false, error: 'hotelId is required.' });
+    return res
+      .status(400)
+      .json({ success: false, error: "hotelId is required." });
   }
 
-  if (!hotelId.startsWith('admin_')) {
-    return res.status(400).json({ success: false, error: 'Only admin-created hotels can be deleted here.' });
+  if (!hotelId.startsWith("admin_")) {
+    return res.status(400).json({
+      success: false,
+      error: "Only admin-created hotels can be deleted here.",
+    });
   }
 
   try {
@@ -911,23 +1099,23 @@ export const deleteAdminHotel = async (req, res) => {
     let canValidateOwner = true;
 
     const ownerLookup = await supabase
-      .from('Hotel_Master')
-      .select('hotel_id, created_by')
-      .eq('hotel_id', hotelId)
+      .from("Hotel_Master")
+      .select("hotel_id, created_by")
+      .eq("hotel_id", hotelId)
       .maybeSingle();
 
     if (ownerLookup.error && isMissingCreatedByColumnError(ownerLookup.error)) {
       canValidateOwner = false;
       const fallbackLookup = await supabase
-        .from('Hotel_Master')
-        .select('hotel_id')
-        .eq('hotel_id', hotelId)
+        .from("Hotel_Master")
+        .select("hotel_id")
+        .eq("hotel_id", hotelId)
         .maybeSingle();
 
       if (fallbackLookup.error) {
         return res.status(500).json({
           success: false,
-          error: 'Failed to validate hotel before deletion.',
+          error: "Failed to validate hotel before deletion.",
           details: fallbackLookup.error.message,
         });
       }
@@ -936,7 +1124,7 @@ export const deleteAdminHotel = async (req, res) => {
     } else if (ownerLookup.error) {
       return res.status(500).json({
         success: false,
-        error: 'Failed to validate hotel before deletion.',
+        error: "Failed to validate hotel before deletion.",
         details: ownerLookup.error.message,
       });
     } else {
@@ -944,20 +1132,29 @@ export const deleteAdminHotel = async (req, res) => {
     }
 
     if (!hotelRecord) {
-      return res.status(404).json({ success: false, error: 'Hotel not found.' });
+      return res
+        .status(404)
+        .json({ success: false, error: "Hotel not found." });
     }
 
-    if (canValidateOwner && hotelRecord.created_by && String(hotelRecord.created_by) !== String(userId)) {
-      return res.status(403).json({ success: false, error: 'You can delete only hotels created by you.' });
+    if (
+      canValidateOwner &&
+      hotelRecord.created_by &&
+      String(hotelRecord.created_by) !== String(userId)
+    ) {
+      return res.status(403).json({
+        success: false,
+        error: "You can delete only hotels created by you.",
+      });
     }
 
     let deleteQuery = supabase
-      .from('Hotel_Master')
+      .from("Hotel_Master")
       .delete()
-      .eq('hotel_id', hotelId);
+      .eq("hotel_id", hotelId);
 
     if (canValidateOwner) {
-      deleteQuery = deleteQuery.eq('created_by', userId);
+      deleteQuery = deleteQuery.eq("created_by", userId);
     }
 
     const { error: deleteError } = await deleteQuery;
@@ -965,20 +1162,20 @@ export const deleteAdminHotel = async (req, res) => {
     if (deleteError) {
       return res.status(500).json({
         success: false,
-        error: 'Failed to delete hotel.',
+        error: "Failed to delete hotel.",
         details: deleteError.message,
       });
     }
 
     return res.status(200).json({
       success: true,
-      message: 'Hotel deleted successfully.',
+      message: "Hotel deleted successfully.",
       hotel_id: hotelId,
     });
   } catch (err) {
     return res.status(500).json({
       success: false,
-      error: 'Server error while deleting hotel.',
+      error: "Server error while deleting hotel.",
       details: err.message,
     });
   }
@@ -990,33 +1187,37 @@ export const createAdminReviewReply = async (req, res) => {
   const { reply_text: replyText } = req.body || {};
 
   if (!adminUserId) {
-    return res.status(401).json({ success: false, error: 'Unauthorized' });
+    return res.status(401).json({ success: false, error: "Unauthorized" });
   }
 
-  const normalizedHotelId = String(hotelId || '').trim();
-  const normalizedReviewId = String(reviewId || '').trim();
-  const sanitizedReply = String(replyText || '').trim();
+  const normalizedHotelId = String(hotelId || "").trim();
+  const normalizedReviewId = String(reviewId || "").trim();
+  const sanitizedReply = String(replyText || "").trim();
 
   if (!normalizedHotelId || !normalizedReviewId) {
-    return res.status(400).json({ success: false, error: 'hotelId and reviewId are required.' });
+    return res
+      .status(400)
+      .json({ success: false, error: "hotelId and reviewId are required." });
   }
 
   if (!sanitizedReply) {
-    return res.status(400).json({ success: false, error: 'reply_text is required.' });
+    return res
+      .status(400)
+      .json({ success: false, error: "reply_text is required." });
   }
 
   try {
     const { data: reviewRecord, error: reviewError } = await supabase
-      .from('review_master')
-      .select('review_id, hotel_id')
-      .eq('review_id', normalizedReviewId)
-      .eq('hotel_id', normalizedHotelId)
+      .from("review_master")
+      .select("review_id, hotel_id")
+      .eq("review_id", normalizedReviewId)
+      .eq("hotel_id", normalizedHotelId)
       .maybeSingle();
 
     if (reviewError) {
       return res.status(500).json({
         success: false,
-        error: 'Failed to validate review for reply.',
+        error: "Failed to validate review for reply.",
         details: reviewError.message,
       });
     }
@@ -1024,7 +1225,7 @@ export const createAdminReviewReply = async (req, res) => {
     if (!reviewRecord) {
       return res.status(404).json({
         success: false,
-        error: 'Review not found for the selected hotel.',
+        error: "Review not found for the selected hotel.",
       });
     }
 
@@ -1036,36 +1237,39 @@ export const createAdminReviewReply = async (req, res) => {
     };
 
     const { data, error } = await supabase
-      .from('review_reply')
+      .from("review_reply")
       .insert(insertPayload)
-      .select('reply_id, review_id, hotel_id, admin_user_id, reply_text, created_at')
+      .select(
+        "reply_id, review_id, hotel_id, admin_user_id, reply_text, created_at",
+      )
       .single();
 
     if (error) {
       if (isMissingReviewReplyTableError(error)) {
         return res.status(400).json({
           success: false,
-          error: 'review_reply table is missing. Run the SQL migration for admin replies.',
+          error:
+            "review_reply table is missing. Run the SQL migration for admin replies.",
           details: error.message,
         });
       }
 
       return res.status(500).json({
         success: false,
-        error: 'Failed to save admin reply.',
+        error: "Failed to save admin reply.",
         details: error.message,
       });
     }
 
     return res.status(201).json({
       success: true,
-      message: 'Reply added successfully.',
+      message: "Reply added successfully.",
       reply: data,
     });
   } catch (err) {
     return res.status(500).json({
       success: false,
-      error: 'Server error while saving admin reply.',
+      error: "Server error while saving admin reply.",
       details: err.message,
     });
   }
