@@ -36,6 +36,8 @@ const buildDisplayAddress = (hotel) => {
 const buildHotelSearchBlob = (hotel) => [
   hotel?.hotel_name,
   hotel?.address,
+  hotel?.price_per_night,
+  hotel?.contact_no,
   hotel?.local_address,
   hotel?.state,
   hotel?.pin_code,
@@ -56,6 +58,71 @@ const COUNTRY_NAME_BY_CODE = Object.fromEntries(
 );
 
 const getCountryLabel = (countryCode) => COUNTRY_NAME_BY_CODE[countryCode] || '';
+
+const parseIntegerPricePerNight = (value) => {
+  if (value === '' || value === null || value === undefined) {
+    return { isValid: false, amount: 0 };
+  }
+
+  const numericValue = Number(value);
+
+  if (!Number.isFinite(numericValue) || numericValue < 0) {
+    return { isValid: false, amount: 0 };
+  }
+
+  return {
+    isValid: true,
+    amount: Math.trunc(numericValue),
+  };
+};
+
+const normalizeHotelPriceForDisplay = (hotel, fallback = 0) => {
+  const fallbackNumber = Number(fallback);
+  const normalizedFallback =
+    Number.isFinite(fallbackNumber) && fallbackNumber >= 0
+      ? Math.trunc(fallbackNumber)
+      : 0;
+
+  const primaryCandidates = [
+    hotel?.price_per_night,
+    hotel?.pricePerNight,
+    hotel?.price,
+  ];
+
+  for (const value of primaryCandidates) {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue) || numericValue < 0) {
+      continue;
+    }
+
+    const normalizedValue = Math.trunc(numericValue);
+
+    if (normalizedValue === 0 && normalizedFallback > 0) {
+      return normalizedFallback;
+    }
+
+    return normalizedValue;
+  }
+
+  return normalizedFallback;
+};
+
+const mergeHotelPrice = (incomingHotel, existingHotel) => {
+  const incomingPrice = normalizeHotelPriceForDisplay(incomingHotel, 0);
+  const existingPrice = normalizeHotelPriceForDisplay(existingHotel, 0);
+
+  if (incomingPrice === 0 && existingPrice > 0) {
+    return {
+      ...incomingHotel,
+      price_per_night: existingPrice,
+    };
+  }
+
+  return {
+    ...incomingHotel,
+    price_per_night: incomingPrice,
+  };
+};
 
 const resolveHotelImageUrl = (rawUrl) => {
   const normalized = String(rawUrl || '').trim();
@@ -159,7 +226,7 @@ const HotelsPage = () => {
 
   useEffect(() => {
     if (isAdmin) {
-      fetchAdminHotels();
+      // Keep optimistic value shown immediately; full refresh happens on page reload/useEffect.
       return;
     }
 
@@ -213,7 +280,18 @@ const HotelsPage = () => {
   const fetchAdminHotels = async () => {
     try {
       const { data } = await axios.get('/api/hotels/admin');
-      setAdminHotels(data?.hotels || []);
+      const normalizedHotels = data?.hotels || [];
+      setAdminHotels((prevHotels) => {
+        const prevHotelById = new Map(
+          prevHotels.map((hotel) => [String(hotel?.hotel_id || ''), hotel])
+        );
+
+        return normalizedHotels.map((hotel) => {
+          const hotelId = String(hotel?.hotel_id || '');
+          const existingHotel = prevHotelById.get(hotelId);
+          return mergeHotelPrice(hotel, existingHotel);
+        });
+      });
     } catch (error) {
       console.error('Failed to fetch admin hotels:', error.message, error.response?.data);
       setAdminHotels([]);
@@ -265,8 +343,7 @@ const HotelsPage = () => {
     const country = getCountryLabel(countryCode);
     const contactNo = (adminHotelForm.contact_no || '').trim();
     const hotelDetails = (adminHotelForm.hotel_details || '').trim();
-    const priceRaw = String(adminHotelForm.price_per_night || '').trim();
-    const parsedPricePerNight = Number(priceRaw);
+    const parsedPrice = parseIntegerPricePerNight(adminHotelForm.price_per_night);
     const composedAddress = [localAddress, state, pinCode, country].filter(Boolean).join(', ');
 
     if (!hotelName) {
@@ -282,7 +359,7 @@ const HotelsPage = () => {
       return;
     }
 
-    if (priceRaw === '' || !Number.isFinite(parsedPricePerNight) || parsedPricePerNight < 0) {
+    if (!parsedPrice.isValid) {
       setAdminHotelStatus({
         type: 'error',
         message: 'Price per night must be a valid non-negative number.',
@@ -303,16 +380,30 @@ const HotelsPage = () => {
       formData.append('country', country);
       formData.append('contact_no', contactNo);
       formData.append('hotel_details', hotelDetails);
-      formData.append('price_per_night', parsedPricePerNight.toFixed(2));
+      formData.append('price_per_night', parsedPrice.amount);
+
+      console.debug('[submitAdminHotel] sending price_per_night:', parsedPrice.amount, typeof parsedPrice.amount);
 
       if (adminHotelImageFile) {
         formData.append('hotel_image', adminHotelImageFile);
       }
 
-      const { data } = await axios.post('/api/hotels/admin', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+      const { data } = await axios.post('/api/hotels/admin', formData);
+
+      console.debug('[submitAdminHotel] stored hotel payload:', data?.hotel);
+
+      const savedHotel = data?.hotel || {};
+      setAdminHotels((prev) => {
+        const normalizedSavedHotel = {
+          ...savedHotel,
+          price_per_night: normalizeHotelPriceForDisplay(savedHotel, parsedPrice.amount),
+        };
+
+        const withoutDuplicate = prev.filter(
+          (hotel) => String(hotel?.hotel_id || '') !== String(normalizedSavedHotel?.hotel_id || '')
+        );
+
+        return [normalizedSavedHotel, ...withoutDuplicate];
       });
 
       setAdminHotelStatus({
@@ -763,7 +854,9 @@ const HotelsPage = () => {
                   {adminHotels.map((hotel) => (
                     <div key={hotel.hotel_id} className="rounded-md border border-white/15 bg-black/35 p-3">
                       <p className="text-base font-semibold text-white">{hotel.hotel_name}</p>
-                      <p className="mt-1 text-sm font-medium text-emerald-300">Price per night: ${Number(hotel?.price_per_night || 0).toFixed(2)}</p>
+                      <div className="mt-2 pt-1">
+                        <p className="text-sm font-medium text-emerald-300">Price per night: {normalizeHotelPriceForDisplay(hotel)}</p>
+                      </div>
                       {hotel.contact_no && <p className="mt-1 text-sm text-gray-300">Contact: {hotel.contact_no}</p>}
                       <p className="mt-1 text-sm text-gray-300">{buildDisplayAddress(hotel) || 'Address not provided'}</p>
                       {hotel.hotel_image_url && (

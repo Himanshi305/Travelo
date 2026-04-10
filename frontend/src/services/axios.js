@@ -12,12 +12,19 @@ const normalizedBackendUrl = rawBackendUrl
 
 const api = axios.create({
   baseURL: normalizedBackendUrl,
-  headers: {
-    "Content-Type": "application/json",
-  },
 });
 
 api.interceptors.request.use(async (config) => {
+  if (config.data instanceof FormData) {
+    delete config.headers?.["Content-Type"];
+    delete config.headers?.common?.["Content-Type"];
+  } else if (!config.headers?.["Content-Type"]) {
+    config.headers = {
+      ...config.headers,
+      "Content-Type": "application/json",
+    };
+  }
+
   const { data: { session } } = await supabase.auth.getSession();
   
   if (session) {
