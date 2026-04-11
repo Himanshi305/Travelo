@@ -38,9 +38,7 @@ const HotelSearchMap = ({ onPlaceSelect, hotels = [], selectedHotelId = null }) 
         setUserLocation(location);
         setMapCenter(location);
       },
-      () => {
-        console.warn('Geolocation denied or unavailable');
-      }
+      () => {}
     );
   }, []);
 
@@ -60,7 +58,6 @@ const HotelSearchMap = ({ onPlaceSelect, hotels = [], selectedHotelId = null }) 
         if (status === 'OK' && result) {
           setDirections(result);
         } else {
-          console.error('Error fetching directions:', { status, result });
           setDirections(null);
         }
       }
@@ -71,14 +68,12 @@ const HotelSearchMap = ({ onPlaceSelect, hotels = [], selectedHotelId = null }) 
     const autocomplete = autocompleteRef.current;
 
     if (!autocomplete || typeof autocomplete.getPlace !== 'function') {
-      console.log('Autocomplete is not ready yet');
       return;
     }
 
     const place = autocomplete.getPlace();
 
     if (!place || !place.geometry || !place.geometry.location) {
-      console.log('Autocomplete place is missing geometry');
       return;
     }
 

@@ -63,8 +63,7 @@ export default function MapPicker({ onLocationChange }) {
     if (res !== null) {
       if (res.status === "OK") {
         setResponse(res);
-      } else {
-        console.error("directions response: ", res);
+
       }
     }
   };

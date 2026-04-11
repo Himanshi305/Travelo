@@ -46,18 +46,11 @@ const RouteMap = ({ onPlaceSelect, selectedDestinationName = '' }) => {
           (result, status) => {
             if (status === 'OK' && result) {
               setDirections(result);
-            } else {
-              console.error('Error fetching directions:', {
-                status,
-                result,
-              });
             }
           }
         );
       },
-      () => {
-        console.error('Geolocation failed or was denied.');
-      }
+      () => {}
     );
   };
 
@@ -69,7 +62,6 @@ const RouteMap = ({ onPlaceSelect, selectedDestinationName = '' }) => {
     const geocoder = new window.google.maps.Geocoder();
     geocoder.geocode({ address: selectedDestinationName }, (results, status) => {
       if (status !== 'OK' || !results?.[0]?.geometry?.location) {
-        console.error('Failed to geocode selected destination:', status);
         return;
       }
 
@@ -88,14 +80,12 @@ const RouteMap = ({ onPlaceSelect, selectedDestinationName = '' }) => {
     const autocomplete = autocompleteRef.current;
 
     if (!autocomplete || typeof autocomplete.getPlace !== 'function') {
-      console.log('Autocomplete is not ready yet');
       return;
     }
 
     const place = autocomplete.getPlace();
 
     if (!place || !place.geometry || !place.geometry.location) {
-      console.log('Autocomplete place is missing geometry');
       return;
     }
 

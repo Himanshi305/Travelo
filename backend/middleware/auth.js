@@ -12,10 +12,6 @@ export const auth = async (req, res, next) => {
   try {
     const { data, error } = await supabase.auth.getUser(token);
 
-    // 🔍 log Supabase response
-    console.log("Supabase user:", data);
-    console.log("Supabase error:", error);
-
     if (error || !data?.user) {
       return res.status(401).json({ msg: 'Invalid token' });
     }

@@ -19,6 +19,9 @@ const Dashboard = () => {
   const [replySubmittingMap, setReplySubmittingMap] = useState({});
   const [replyStatusMap, setReplyStatusMap] = useState({});
 
+  const [deletingHotelId, setDeletingHotelId] = useState('');
+  const [deleteStatus, setDeleteStatus] = useState({ type: '', message: '' });
+
   useEffect(() => {
     if (user?.id) {
       fetchHotels();
@@ -182,6 +185,37 @@ const Dashboard = () => {
     }
   };
 
+  const handleDeleteHotel = async (hotelId) => {
+    const normalizedHotelId = String(hotelId || '').trim();
+    if (!normalizedHotelId) {
+      return;
+    }
+
+    const shouldDelete = window.confirm('Delete this hotel card? This action cannot be undone.');
+    if (!shouldDelete) {
+      return;
+    }
+
+    setDeletingHotelId(normalizedHotelId);
+    setDeleteStatus({ type: '', message: '' });
+
+    try {
+      const { data } = await axios.delete(`/api/hotels/admin/${encodeURIComponent(normalizedHotelId)}`);
+      setHotels((prev) => prev.filter((hotel) => String(hotel.hotel_id) !== normalizedHotelId));
+      setDeleteStatus({
+        type: 'success',
+        message: data?.message || 'Hotel deleted successfully.',
+      });
+    } catch (error) {
+      setDeleteStatus({
+        type: 'error',
+        message: error?.response?.data?.error || 'Failed to delete hotel.',
+      });
+    } finally {
+      setDeletingHotelId('');
+    }
+  };
+
   useEffect(() => {
     hotels.forEach((hotel) => {
       const hotelId = resolveHotelId(hotel);
@@ -222,6 +256,15 @@ const Dashboard = () => {
 
         <div className="mb-8 rounded-2xl border border-white/20 bg-white/10 p-6 backdrop-blur-md">
           <h2 className="text-3xl font-bold mb-6">{isAdmin ? 'Your Added Hotels' : 'Stored Hotels'}</h2>
+          {deleteStatus.message && (
+            <div className={`mb-4 rounded-md px-4 py-2 text-sm font-semibold ${
+              deleteStatus.type === 'success'
+                ? 'bg-green-500/20 text-green-300'
+                : 'bg-red-500/20 text-red-300'
+            }`}>
+              {deleteStatus.message}
+            </div>
+          )}
           {hotels.length === 0 ? (
             <p className="text-gray-300">No hotels available yet.</p>
           ) : (
@@ -245,7 +288,19 @@ const Dashboard = () => {
                           <p>Price per night: {getDisplayPrice(hotel)}</p>
                           {isAdmin && <p>Details: {hotel.hotel_details || 'No details available.'}</p>}
                           {hotel.contact_no && <p>Contact: {hotel.contact_no}</p>}
+                        {isAdmin && hotel.gpay_id && <p>GPay ID: {hotel.gpay_id}</p>}
                         </div>
+
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteHotel(hotel.hotel_id)}
+                            disabled={deletingHotelId === String(hotel.hotel_id)}
+                            className="mt-4 w-full rounded-md border border-red-300/40 bg-red-500/20 px-3 py-2 text-sm font-semibold text-red-200 hover:bg-red-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {deletingHotelId === String(hotel.hotel_id) ? 'Deleting...' : 'Delete Hotel'}
+                          </button>
+                        )}
 
                         {!isAdmin && (
                           <div className="mt-4 rounded-lg border border-white/15 bg-black/35 p-3">

@@ -9,6 +9,7 @@ const normalizeGoogleHotel = (hotelData) => ({
   rating: Number(hotelData.rating || 0),
   price_per_night: 0,
   contact_no: "",
+  gpay_id: "",
   hotel_url: "",
   hotel_details: "",
   photo_reference: hotelData.photos?.[0]?.photo_reference || null,
@@ -112,6 +113,7 @@ const isMissingOptionalHotelColumnError = (error) => {
       "state",
       "pin_code",
       "country",
+      "gpay_id",
     ].some((columnName) => message.includes(columnName))
   );
 };
@@ -144,6 +146,8 @@ const isMissingCreatedByColumnError = (error) =>
   isMissingColumnError(error, "created_by");
 const isMissingContactNoColumnError = (error) =>
   isMissingColumnError(error, "contact_no");
+const isMissingGpayIdColumnError = (error) =>
+  isMissingColumnError(error, "gpay_id");
 
 const isSchemaMismatchError = (error) => {
   const code = String(error?.code || "");
@@ -262,16 +266,8 @@ const fetchReviewRepliesMap = async (reviewIds) => {
 const saveHotel = async (hotelData) => {
   const normalizedHotel = normalizeGoogleHotel(hotelData);
   if (!normalizedHotel.hotel_id) {
-    console.warn(
-      "[saveHotel] Skipping hotel with missing place_id:",
-      normalizedHotel.hotel_name,
-    );
-    return null;
+return null;
   }
-
-  console.log(
-    `[saveHotel] Processing: "${normalizedHotel.hotel_name}" at "${normalizedHotel.address}"`,
-  );
 
   const payload = {
     hotel_id: normalizedHotel.hotel_id,
@@ -287,16 +283,8 @@ const saveHotel = async (hotelData) => {
     .single();
 
   if (error) {
-    console.error(
-      `[saveHotel] Error upserting "${normalizedHotel.hotel_name}" to Supabase:`,
-      error,
-    );
     return null;
   }
-
-  console.log(
-    `[saveHotel] Upserted hotel: "${normalizedHotel.hotel_name}" with hotel_id ${data.hotel_id}`,
-  );
   return {
     ...normalizedHotel,
     ...data,
@@ -310,13 +298,6 @@ export const getNearbyHotels = async (req, res) => {
   const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
   const { lat, lng } = req.query;
 
-  console.log(
-    `\n[getNearbyHotels] Request received — lat: ${lat}, lng: ${lng}`,
-  );
-  console.log(
-    `[getNearbyHotels] GOOGLE_PLACES_API_KEY is ${GOOGLE_PLACES_API_KEY ? "SET ✓" : "MISSING ✗"}`,
-  );
-
   if (!lat || !lng) {
     return res
       .status(400)
@@ -328,8 +309,6 @@ export const getNearbyHotels = async (req, res) => {
       .status(500)
       .json({ error: "GOOGLE_PLACES_API_KEY is missing on the backend." });
   }
-
-  console.log(`[getNearbyHotels] Calling Google Places API...`);
 
   try {
     const response = await axios.get(
@@ -346,19 +325,7 @@ export const getNearbyHotels = async (req, res) => {
     const googleStatus = response.data.status;
     const places = response.data.results || [];
 
-    console.log(`[getNearbyHotels] Google API status: ${googleStatus}`);
-    console.log(
-      "[getNearbyHotels] Raw Google API response:",
-      JSON.stringify(response.data, null, 2),
-    );
-    console.log(
-      `[getNearbyHotels] Places returned by Google: ${places.length}`,
-    );
-
     if (googleStatus === "REQUEST_DENIED") {
-      console.error(
-        "[getNearbyHotels] REQUEST_DENIED — API key may be invalid or missing billing.",
-      );
       return res.status(403).json({
         error:
           "Google Places API request was denied. Check your API key and billing.",
@@ -366,38 +333,22 @@ export const getNearbyHotels = async (req, res) => {
     }
 
     if (googleStatus === "INVALID_REQUEST") {
-      console.error(
-        "[getNearbyHotels] INVALID_REQUEST — Bad parameters sent to Google API.",
-      );
       return res
         .status(400)
         .json({ error: "Invalid request sent to Google Places API." });
     }
 
     if (googleStatus === "ZERO_RESULTS") {
-      console.warn(
-        "[getNearbyHotels] ZERO_RESULTS — No hotels found near these coordinates.",
-      );
       return res.json([]);
     }
 
     if (googleStatus !== "OK") {
-      console.error(
-        `[getNearbyHotels] Unexpected Google status: ${googleStatus}`,
-        response.data.error_message || "",
-      );
       return res
         .status(500)
         .json({ error: `Unexpected Google API status: ${googleStatus}` });
     }
 
     const normalizedHotels = places.map(normalizeGoogleHotel);
-
-    places.forEach((p, i) => {
-      console.log(
-        `[getNearbyHotels] Place ${i + 1}: "${p.name}" — rating: ${p.rating ?? "N/A"}, vicinity: "${p.vicinity}"`,
-      );
-    });
 
     const savedHotels = await Promise.all(
       places.map((hotel) => saveHotel(hotel)),
@@ -406,9 +357,6 @@ export const getNearbyHotels = async (req, res) => {
       const savedHotel = savedHotels[index];
 
       if (savedHotel === null) {
-        console.warn(
-          `[getNearbyHotels] Returning Google result without DB save: "${hotel.hotel_name}"`,
-        );
         return hotel;
       }
 
@@ -420,13 +368,6 @@ export const getNearbyHotels = async (req, res) => {
       };
     });
 
-    console.log(
-      `[getNearbyHotels] Returning ${responseHotels.length} hotels to client.`,
-    );
-    console.log(
-      "[getNearbyHotels] Returning hotel names:",
-      responseHotels.map((hotel) => hotel.hotel_name),
-    );
     res.json(responseHotels);
   } catch (error) {
     console.error(
@@ -795,10 +736,6 @@ export const getAdminHotels = async (req, res) => {
       .order("hotel_id", { ascending: false });
 
     if (error) {
-      console.warn(
-        "[getAdminHotels] created_by query failed; trying fallback strategy.",
-        error,
-      );
       const fallbackResult = await supabase
         .from("Hotel_Master")
         .select("*")
@@ -900,6 +837,7 @@ export const createAdminHotel = async (req, res) => {
     "",
   );
   const contact_no = readRequestField(req.body, ["contact_no", "contactNo"], "");
+  const gpay_id = readRequestField(req.body, ["gpay_id", "gpayId"], "");
   const trimmedName = String(hotel_name || "").trim();
   const trimmedUrl = String(hotel_url || "").trim();
   const trimmedDetails = String(hotel_details || "").trim();
@@ -915,11 +853,8 @@ export const createAdminHotel = async (req, res) => {
   const trimmedPinCode = toTrimmedString(pin_code);
   const trimmedCountry = toTrimmedString(country);
   const trimmedContactNo = toTrimmedString(contact_no);
+  const trimmedGpayId = toTrimmedString(gpay_id);
   const parsedPrice = parseIntegerPricePerNight(rawPricePerNight);
-
-  console.log("[createAdminHotel] request body keys:", Object.keys(req.body || {}));
-  console.log("[createAdminHotel] price_per_night received:", rawPricePerNight);
-  console.log("[createAdminHotel] integer price_per_night:", parsedPrice);
 
   const uploadedImagePath = req.file?.path ? String(req.file.path).trim() : "";
   if (req.file && !uploadedImagePath) {
@@ -959,6 +894,7 @@ export const createAdminHotel = async (req, res) => {
     hotel_details: trimmedDetails,
     price_per_night: parsedPrice.amount,
     contact_no: trimmedContactNo,
+    gpay_id: trimmedGpayId,
     local_address: trimmedLocalAddress,
     state: trimmedState,
     pin_code: trimmedPinCode,
@@ -966,8 +902,6 @@ export const createAdminHotel = async (req, res) => {
     hotel_image_url: trimmedImageUrl,
     created_by: userId,
   };
-
-  console.log("[createAdminHotel] insert payload price_per_night:", payload.price_per_night);
 
   try {
     let { data, error } = await supabase
@@ -977,9 +911,6 @@ export const createAdminHotel = async (req, res) => {
       .single();
 
     if (isMissingOptionalHotelColumnError(error)) {
-      console.warn(
-        "[createAdminHotel] optional column missing; retrying insert with reduced payload.",
-      );
       const fallbackPayload = {
         hotel_id: payload.hotel_id,
         hotel_name: payload.hotel_name,
@@ -990,6 +921,7 @@ export const createAdminHotel = async (req, res) => {
         hotel_details: payload.hotel_details,
         price_per_night: payload.price_per_night,
         contact_no: payload.contact_no,
+        gpay_id: payload.gpay_id,
       };
 
       if (isMissingColumnError(error, "full_address")) {
@@ -998,6 +930,10 @@ export const createAdminHotel = async (req, res) => {
 
       if (isMissingContactNoColumnError(error)) {
         delete fallbackPayload.contact_no;
+      }
+
+      if (isMissingGpayIdColumnError(error)) {
+        delete fallbackPayload.gpay_id;
       }
 
       if (!isMissingCreatedByColumnError(error)) {
@@ -1046,16 +982,8 @@ export const createAdminHotel = async (req, res) => {
       .single();
 
     if (updatePriceError) {
-      console.error(
-        "[createAdminHotel] Failed to force-update price_per_night:",
-        updatePriceError,
-      );
     } else {
       data = updatedHotel;
-      console.log(
-        "[createAdminHotel] final stored price_per_night:",
-        data?.price_per_night,
-      );
     }
 
     return res.status(201).json({
@@ -1147,7 +1075,6 @@ export const deleteAdminHotel = async (req, res) => {
         error: "You can delete only hotels created by you.",
       });
     }
-
     let deleteQuery = supabase
       .from("Hotel_Master")
       .delete()

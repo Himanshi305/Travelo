@@ -30,6 +30,7 @@ CREATE TABLE "Hotel_Master" (
   country VARCHAR(120) DEFAULT '',
   price_per_night FLOAT(10, 2) DEFAULT 0 CHECK (price_per_night >= 0),
   contact_no VARCHAR(30) DEFAULT '',
+  gpay_id VARCHAR(120) DEFAULT '',
   rating NUMERIC(2, 1) DEFAULT 0 CHECK (rating >= 0 AND rating <= 5),
   hotel_url TEXT DEFAULT '',
   hotel_details TEXT DEFAULT '',
@@ -37,7 +38,7 @@ CREATE TABLE "Hotel_Master" (
   created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
-
+-
 CREATE TABLE booking_details (
   booking_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,

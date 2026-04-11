@@ -8,7 +8,7 @@ import authRoutes from './routes/auth.js';
 import usersRoutes from './routes/users.js';
 import destinationRoutes from './routes/destinations.js';
 
-console.log("app.js is running");
+
 
 const app = express();
 

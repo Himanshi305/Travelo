@@ -148,12 +148,13 @@ const HotelsPage = () => {
 
   const [adminHotels, setAdminHotels] = useState([]);
   const [adminHotelSubmitting, setAdminHotelSubmitting] = useState(false);
-  const [adminDeletingHotelId, setAdminDeletingHotelId] = useState('');
+
   const [adminHotelStatus, setAdminHotelStatus] = useState({ type: '', message: '' });
   const [adminHotelForm, setAdminHotelForm] = useState({
     hotel_name: '',
     price_per_night: '',
     contact_no: '',
+    gpay_id: '',
     local_address: '',
     state: '',
     pin_code: '',
@@ -168,6 +169,8 @@ const HotelsPage = () => {
   const [selectedHotel, setSelectedHotel] = useState(null);
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
   const [bookingStatus, setBookingStatus] = useState({ type: '', message: '' });
+  const [pendingBookingPayload, setPendingBookingPayload] = useState(null);
+  const [showPaymentPanel, setShowPaymentPanel] = useState(false);
   const bookingSectionRef = useRef(null);
   const [bookingForm, setBookingForm] = useState({
     check_in: '',
@@ -342,6 +345,7 @@ const HotelsPage = () => {
     const countryCode = (adminHotelForm.country || '').trim();
     const country = getCountryLabel(countryCode);
     const contactNo = (adminHotelForm.contact_no || '').trim();
+    const gpayId = (adminHotelForm.gpay_id || '').trim();
     const hotelDetails = (adminHotelForm.hotel_details || '').trim();
     const parsedPrice = parseIntegerPricePerNight(adminHotelForm.price_per_night);
     const composedAddress = [localAddress, state, pinCode, country].filter(Boolean).join(', ');
@@ -379,18 +383,15 @@ const HotelsPage = () => {
       formData.append('pin_code', pinCode);
       formData.append('country', country);
       formData.append('contact_no', contactNo);
+      formData.append('gpay_id', gpayId);
       formData.append('hotel_details', hotelDetails);
       formData.append('price_per_night', parsedPrice.amount);
-
-      console.debug('[submitAdminHotel] sending price_per_night:', parsedPrice.amount, typeof parsedPrice.amount);
 
       if (adminHotelImageFile) {
         formData.append('hotel_image', adminHotelImageFile);
       }
 
       const { data } = await axios.post('/api/hotels/admin', formData);
-
-      console.debug('[submitAdminHotel] stored hotel payload:', data?.hotel);
 
       const savedHotel = data?.hotel || {};
       setAdminHotels((prev) => {
@@ -415,6 +416,8 @@ const HotelsPage = () => {
         hotel_name: '',
         price_per_night: '',
         contact_no: '',
+        gpay_id: '',
+        gpay_qr_url: '',
         local_address: '',
         state: '',
         pin_code: '',
@@ -484,6 +487,8 @@ const HotelsPage = () => {
   const handleSelectHotel = (hotel) => {
     setSelectedHotel(hotel);
     setBookingStatus({ type: '', message: '' });
+    setPendingBookingPayload(null);
+    setShowPaymentPanel(false);
     setBookingForm((prev) => ({
       ...prev,
       amount: Number(hotel?.price_per_night || 0),
@@ -498,18 +503,36 @@ const HotelsPage = () => {
     }));
   };
 
-  const getPostBookingRedirectUrl = (hotel) => {
-    const officialUrl = String(hotel?.hotel_url || '').trim();
-    if (/^https?:\/\//i.test(officialUrl)) {
-      return officialUrl;
-    }
-
-    return 'https://www.makemytrip.com/hotels/';
-  };
-
   const handleBookingSubmit = async (e) => {
     e.preventDefault();
     if (!selectedHotel) {
+      return;
+    }
+
+    const payload = {
+      hotel_id: String(selectedHotel.hotel_id || selectedHotel.place_id || ''),
+      place_id: String(selectedHotel.place_id || selectedHotel.hotel_id || ''),
+      hotel_name: selectedHotel.hotel_name,
+      address: selectedHotel.address,
+      rating: Number(selectedHotel.rating || 0),
+      check_in: bookingForm.check_in,
+      check_out: bookingForm.check_out,
+      guest_name: bookingForm.guest_name,
+      phone_no: bookingForm.phone_no,
+      email: bookingForm.email,
+      amount: Number(bookingForm.amount || 0),
+    };
+
+    setPendingBookingPayload(payload);
+    setShowPaymentPanel(true);
+    setBookingStatus({
+      type: 'success',
+      message: 'Booking details saved. Complete payment below, then confirm payment.',
+    });
+  };
+
+  const handleConfirmPaymentAndBook = async () => {
+    if (!pendingBookingPayload) {
       return;
     }
 
@@ -517,21 +540,7 @@ const HotelsPage = () => {
     setBookingStatus({ type: '', message: '' });
 
     try {
-      const payload = {
-        hotel_id: String(selectedHotel.hotel_id || selectedHotel.place_id || ''),
-        place_id: String(selectedHotel.place_id || selectedHotel.hotel_id || ''),
-        hotel_name: selectedHotel.hotel_name,
-        address: selectedHotel.address,
-        rating: Number(selectedHotel.rating || 0),
-        check_in: bookingForm.check_in,
-        check_out: bookingForm.check_out,
-        guest_name: bookingForm.guest_name,
-        phone_no: bookingForm.phone_no,
-        email: bookingForm.email,
-        amount: Number(bookingForm.amount || 0),
-      };
-
-      const { data } = await axios.post('/api/bookings', payload);
+      const { data } = await axios.post('/api/bookings', pendingBookingPayload);
       setBookingStatus({ type: 'success', message: data?.message || 'Booking saved successfully.' });
       setBookingForm((prev) => ({
         ...prev,
@@ -539,10 +548,11 @@ const HotelsPage = () => {
         check_out: '',
         phone_no: '',
       }));
+      setPendingBookingPayload(null);
+      setShowPaymentPanel(false);
 
-      const redirectUrl = getPostBookingRedirectUrl(selectedHotel);
       setTimeout(() => {
-        window.location.assign(redirectUrl);
+        window.location.assign('/dashboard');
       }, 800);
     } catch (error) {
       console.error('Failed to save booking:', error);
@@ -684,10 +694,49 @@ const HotelsPage = () => {
                       disabled={bookingSubmitting}
                       className="rounded-md bg-primary px-5 py-2 font-semibold text-black hover:brightness-95 disabled:opacity-70"
                     >
-                      {bookingSubmitting ? 'Saving...' : 'Confirm Booking'}
+                      Continue to Payment
                     </button>
                   </div>
                 </form>
+
+                {showPaymentPanel && pendingBookingPayload && (
+                  <div className="mt-6 rounded-xl border border-white/20 bg-black/30 p-4">
+                    <h4 className="text-lg font-semibold text-white">Payment Details</h4>
+                    <p className="mt-1 text-sm text-gray-300">
+                      Pay this amount to complete booking: <span className="font-semibold text-emerald-300">{Number(pendingBookingPayload.amount || 0)}</span>
+                    </p>
+
+                    {selectedHotel?.gpay_id && (
+                      <p className="mt-2 text-sm text-gray-200">GPay ID: {selectedHotel.gpay_id}</p>
+                    )}
+
+                    {!selectedHotel?.gpay_id && (
+                      <p className="mt-2 text-sm text-amber-300">Payment details are not available for this hotel. Contact hotel admin before payment.</p>
+                    )}
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={handleConfirmPaymentAndBook}
+                        disabled={bookingSubmitting}
+                        className="rounded-md bg-emerald-400 px-4 py-2 text-sm font-semibold text-black hover:bg-emerald-300 disabled:opacity-70"
+                      >
+                        {bookingSubmitting ? 'Saving Booking...' : 'I Have Paid, Confirm Booking'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowPaymentPanel(false);
+                          setPendingBookingPayload(null);
+                        }}
+                        disabled={bookingSubmitting}
+                        className="rounded-md border border-white/30 bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20 disabled:opacity-70"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -735,6 +784,23 @@ const HotelsPage = () => {
                   placeholder="Enter contact number"
                   className="mt-1 w-full rounded-md border border-white/20 bg-black/30 px-3 py-2 text-white"
                 />
+              </div>
+
+              <div className="rounded-lg border border-white/10 bg-black/20 p-4">
+                <p className="text-sm font-semibold text-white">Payment Details (Optional)</p>
+                <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-white/80">GPay ID</label>
+                    <input
+                      type="text"
+                      name="gpay_id"
+                      value={adminHotelForm.gpay_id}
+                      onChange={handleAdminHotelInput}
+                      placeholder="example@okhdfcbank"
+                      className="mt-1 w-full rounded-md border border-white/20 bg-black/30 px-3 py-2 text-white"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -858,6 +924,7 @@ const HotelsPage = () => {
                         <p className="text-sm font-medium text-emerald-300">Price per night: {normalizeHotelPriceForDisplay(hotel)}</p>
                       </div>
                       {hotel.contact_no && <p className="mt-1 text-sm text-gray-300">Contact: {hotel.contact_no}</p>}
+                      {hotel.gpay_id && <p className="mt-1 text-sm text-gray-300">GPay ID: {hotel.gpay_id}</p>}
                       <p className="mt-1 text-sm text-gray-300">{buildDisplayAddress(hotel) || 'Address not provided'}</p>
                       {hotel.hotel_image_url && (
                         <img
@@ -879,16 +946,6 @@ const HotelsPage = () => {
                       {hotel.hotel_details && (
                         <p className="mt-1 text-sm text-gray-300">{hotel.hotel_details}</p>
                       )}
-                      <div className="mt-3">
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteAdminHotel(hotel.hotel_id)}
-                          disabled={adminDeletingHotelId === String(hotel.hotel_id)}
-                          className="rounded-md border border-red-300/40 bg-red-500/20 px-3 py-1 text-xs font-semibold text-red-200 hover:bg-red-500/30 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {adminDeletingHotelId === String(hotel.hotel_id) ? 'Deleting...' : 'Delete'}
-                        </button>
-                      </div>
                     </div>
                   ))}
                 </div>
