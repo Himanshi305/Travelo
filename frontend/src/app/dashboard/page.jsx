@@ -46,6 +46,15 @@ const Dashboard = () => {
     return rawId ? String(rawId).trim() : null;
   };
 
+  const getDisplayPrice = (hotel) => {
+    const numericPrice = Number(hotel?.price_per_night);
+    if (!Number.isFinite(numericPrice) || numericPrice < 0) {
+      return 0;
+    }
+
+    return Math.trunc(numericPrice);
+  };
+
   const setReviewFormField = (hotelId, field, value) => {
     setReviewForms((prev) => ({
       ...prev,
@@ -233,6 +242,7 @@ const Dashboard = () => {
                         <p className="text-sm text-gray-300 mt-1">{hotel.address}</p>
                         <div className="mt-3 text-sm text-gray-300 space-y-1">
                           <p>Rating: {Number(hotel.rating || 0).toFixed(1)}</p>
+                          <p>Price per night: {getDisplayPrice(hotel)}</p>
                           {isAdmin && <p>Details: {hotel.hotel_details || 'No details available.'}</p>}
                           {hotel.contact_no && <p>Contact: {hotel.contact_no}</p>}
                         </div>

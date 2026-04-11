@@ -39,6 +39,15 @@ const getHotelImage = (hotel) => {
   return `https://source.unsplash.com/800x500/?hotel,${encodeURIComponent(hotel.hotel_name || 'travel')}`;
 };
 
+const getDisplayPrice = (hotel) => {
+  const numericPrice = Number(hotel?.price_per_night);
+  if (!Number.isFinite(numericPrice) || numericPrice < 0) {
+    return 0;
+  }
+
+  return Math.trunc(numericPrice);
+};
+
 const HotelCard = ({ hotel, onSelect }) => {
   const handleClick = () => {
     if (onSelect) {
@@ -65,6 +74,7 @@ const HotelCard = ({ hotel, onSelect }) => {
           <span className="text-gray-300 ml-2 text-sm">{hotel.rating.toFixed(1)}</span>
         </div>
         <div className="mt-4">
+          <p className="text-sm font-medium text-emerald-300">Price per night: {getDisplayPrice(hotel)}</p>
           {hotel.contact_no && <p className="text-sm text-gray-400 mt-1">Contact: {hotel.contact_no}</p>}
           <p className="text-xs text-amber-300 mt-2">Click card to view hotel details</p>
         </div>
