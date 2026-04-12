@@ -50,12 +50,14 @@ app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
 
 import hotelsRoutes from './routes/hotels.js';
 import bookingsRoutes from './routes/bookings.js';
+import paymentRoutes from './routes/payment.js';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/destinations', destinationRoutes);
 app.use('/api/hotels', hotelsRoutes);
 app.use('/api/bookings', bookingsRoutes);
+app.use('/api/payment', paymentRoutes);
 
 app.get('/', (req, res) => {
     res.send('Hello World!');

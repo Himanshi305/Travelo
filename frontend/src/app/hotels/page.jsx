@@ -7,6 +7,7 @@ import axios from '../../services/axios';
 import AuthContext from '../../context/AuthContext';
 import HotelSearchMap from '../../components/HotelSearchMap';
 import HotelCard from '../../components/HotelCard';
+import { useRazorpayScript, useRazorpayPayment } from '../../hooks/useRazorpay';
 
 const getDestinationStorageKey = (userId) => `destination:${userId || 'guest'}`;
 const API_BASE_URL = (process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000')
@@ -145,6 +146,10 @@ const resolveHotelImageUrl = (rawUrl) => {
 const HotelsPage = () => {
   const { user } = useContext(AuthContext);
   const isAdmin = user?.user_metadata?.role === 'admin';
+
+  // Initialize Razorpay
+  useRazorpayScript();
+  const { initiatePayment } = useRazorpayPayment();
 
   const [adminHotels, setAdminHotels] = useState([]);
   const [adminHotelSubmitting, setAdminHotelSubmitting] = useState(false);
@@ -524,24 +529,41 @@ const HotelsPage = () => {
     };
 
     setPendingBookingPayload(payload);
-    setShowPaymentPanel(true);
-    setBookingStatus({
-      type: 'success',
-      message: 'Booking details saved. Complete payment below, then confirm payment.',
-    });
-  };
-
-  const handleConfirmPaymentAndBook = async () => {
-    if (!pendingBookingPayload) {
-      return;
-    }
-
     setBookingSubmitting(true);
     setBookingStatus({ type: '', message: '' });
 
+    // Initiate Razorpay payment
+    initiatePayment(
+      payload,
+      (paymentId) => {
+        // Payment successful, save booking
+        handleConfirmPaymentAndBook(paymentId);
+      },
+      (error) => {
+        setBookingStatus({
+          type: 'error',
+          message: error || 'Payment failed. Please try again.',
+        });
+        setPendingBookingPayload(null);
+        setBookingSubmitting(false);
+      }
+    );
+  };
+
+  const handleConfirmPaymentAndBook = async (paymentId) => {
+    if (!pendingBookingPayload) {
+      setBookingSubmitting(false);
+      return;
+    }
+
     try {
-      const { data } = await axios.post('/api/bookings', pendingBookingPayload);
-      setBookingStatus({ type: 'success', message: data?.message || 'Booking saved successfully.' });
+      const bookingData = {
+        ...pendingBookingPayload,
+        payment_id: paymentId,
+      };
+
+      const { data } = await axios.post('/api/bookings', bookingData);
+      setBookingStatus({ type: 'success', message: data?.message || 'Booking confirmed successfully!' });
       setBookingForm((prev) => ({
         ...prev,
         check_in: '',
@@ -553,12 +575,12 @@ const HotelsPage = () => {
 
       setTimeout(() => {
         window.location.assign('/dashboard');
-      }, 800);
+      }, 1500);
     } catch (error) {
       console.error('Failed to save booking:', error);
       setBookingStatus({
         type: 'error',
-        message: error?.response?.data?.error || 'Failed to save booking.',
+        message: error?.response?.data?.error || 'Failed to save booking after payment.',
       });
     } finally {
       setBookingSubmitting(false);
@@ -694,47 +716,18 @@ const HotelsPage = () => {
                       disabled={bookingSubmitting}
                       className="rounded-md bg-primary px-5 py-2 font-semibold text-black hover:brightness-95 disabled:opacity-70"
                     >
-                      Continue to Payment
+                      {bookingSubmitting ? 'Processing...' : 'Pay Now with Razorpay'}
                     </button>
                   </div>
                 </form>
 
                 {showPaymentPanel && pendingBookingPayload && (
                   <div className="mt-6 rounded-xl border border-white/20 bg-black/30 p-4">
-                    <h4 className="text-lg font-semibold text-white">Payment Details</h4>
+                    <h4 className="text-lg font-semibold text-white">Razorpay Payment</h4>
                     <p className="mt-1 text-sm text-gray-300">
-                      Pay this amount to complete booking: <span className="font-semibold text-emerald-300">{Number(pendingBookingPayload.amount || 0)}</span>
+                      Amount to pay: <span className="font-semibold text-emerald-300">₹{Number(pendingBookingPayload.amount || 0)}</span>
                     </p>
-
-                    {selectedHotel?.gpay_id && (
-                      <p className="mt-2 text-sm text-gray-200">GPay ID: {selectedHotel.gpay_id}</p>
-                    )}
-
-                    {!selectedHotel?.gpay_id && (
-                      <p className="mt-2 text-sm text-amber-300">Payment details are not available for this hotel. Contact hotel admin before payment.</p>
-                    )}
-
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={handleConfirmPaymentAndBook}
-                        disabled={bookingSubmitting}
-                        className="rounded-md bg-emerald-400 px-4 py-2 text-sm font-semibold text-black hover:bg-emerald-300 disabled:opacity-70"
-                      >
-                        {bookingSubmitting ? 'Saving Booking...' : 'I Have Paid, Confirm Booking'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowPaymentPanel(false);
-                          setPendingBookingPayload(null);
-                        }}
-                        disabled={bookingSubmitting}
-                        className="rounded-md border border-white/30 bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20 disabled:opacity-70"
-                      >
-                        Cancel
-                      </button>
-                    </div>
+                    <p className="mt-2 text-sm text-gray-200">A payment window will open when you click "Pay Now". Please complete your payment using Razorpay's secure platform.</p>
                   </div>
                 )}
               </div>

@@ -22,11 +22,54 @@ const Dashboard = () => {
   const [deletingHotelId, setDeletingHotelId] = useState('');
   const [deleteStatus, setDeleteStatus] = useState({ type: '', message: '' });
 
+  const [bookings, setBookings] = useState([]);
+  const [bookingsLoading, setBookingsLoading] = useState(false);
+
   useEffect(() => {
     if (user?.id) {
       fetchHotels();
+      if (!isAdmin) {
+        fetchBookings();
+      }
     }
   }, [user?.id, isAdmin]);
+
+  const fetchBookings = async () => {
+    setBookingsLoading(true);
+    try {
+      const { data } = await axios.get('/api/bookings');
+      setBookings(Array.isArray(data?.bookings) ? data.bookings : []);
+    } catch (err) {
+      console.error('Failed to fetch bookings:', err);
+      setBookings([]);
+    } finally {
+      setBookingsLoading(false);
+    }
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    try {
+      return new Date(dateString).toLocaleDateString('en-IN', {
+        year: 'numeric',
+        month: 'short',
+        day: '2-digit',
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
+  const calculateNights = (checkIn, checkOut) => {
+    try {
+      const start = new Date(checkIn);
+      const end = new Date(checkOut);
+      const nights = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+      return nights > 0 ? nights : 0;
+    } catch {
+      return 0;
+    }
+  };
 
   const fetchHotels = async () => {
     try {
@@ -253,6 +296,51 @@ const Dashboard = () => {
             </div>
           </div>
         </div>
+
+        {!isAdmin && bookings.length > 0 && (
+          <div className="mb-8 rounded-2xl border border-white/20 bg-white/10 p-6 backdrop-blur-md">
+            <h2 className="text-3xl font-bold mb-6">Your Booked Hotels</h2>
+            {bookingsLoading ? (
+              <p className="text-gray-300">Loading bookings...</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {bookings.map((booking) => (
+                  <div key={booking.booking_id} className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+                    <h3 className="text-lg font-bold text-white">{booking.hotel_name}</h3>
+                    <p className="text-sm text-gray-300 mt-1">{booking.address}</p>
+                    
+                    <div className="mt-4 space-y-2 text-sm text-gray-300">
+                      <div className="flex justify-between">
+                        <span>Check-in:</span>
+                        <span className="font-semibold text-emerald-300">{formatDate(booking.checkin_date)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Check-out:</span>
+                        <span className="font-semibold text-emerald-300">{formatDate(booking.checkout_date)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Nights:</span>
+                        <span className="font-semibold text-emerald-300">{calculateNights(booking.checkin_date, booking.checkout_date)}</span>
+                      </div>
+                      <div className="flex justify-between border-t border-white/10 pt-2 mt-2">
+                        <span>Total Amount:</span>
+                        <span className="font-semibold text-emerald-400">₹{Number(booking.amount || 0).toLocaleString('en-IN')}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Guest:</span>
+                        <span className="font-semibold">{booking.guest_name}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Status:</span>
+                        <span className="font-semibold text-green-400">✓ Confirmed</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="mb-8 rounded-2xl border border-white/20 bg-white/10 p-6 backdrop-blur-md">
           <h2 className="text-3xl font-bold mb-6">{isAdmin ? 'Your Added Hotels' : 'Stored Hotels'}</h2>

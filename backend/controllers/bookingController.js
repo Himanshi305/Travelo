@@ -64,6 +64,10 @@ const validateBookingPayload = (payload) => {
     return 'amount is required.';
   }
 
+  if (!payload.payment_id) {
+    return 'payment_id is required. Complete payment first.';
+  }
+
   const checkIn = new Date(payload.checkin_date);
   const checkOut = new Date(payload.checkout_date);
 
@@ -107,6 +111,7 @@ const normalizeBookingPayload = (req) => {
     phone_no: toTrimmedString(body.phone_no),
     email: toTrimmedString(body.email),
     amount: Number(body.amount),
+    payment_id: toTrimmedString(body.payment_id),
     hotel_name: body.hotel_name || null,
     address: body.address || null,
     rating: Number(body.rating || 0),
@@ -227,6 +232,7 @@ export const createBooking = async (req, res) => {
       phone_no: payload.phone_no,
       email: payload.email,
       amount: payload.amount,
+      payment_id: payload.payment_id,
     };
 
     const { data, error } = await supabase
