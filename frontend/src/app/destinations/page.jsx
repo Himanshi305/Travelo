@@ -7,6 +7,31 @@ import AuthContext from '../../context/AuthContext';
 import RouteMap from '../../components/RouteMap';
 
 const getDestinationStorageKey = (userId) => `destination:${userId || 'guest'}`;
+const getLiveLocationStorageKey = (userId) => `live_location:${userId || 'guest'}`;
+
+const toRadians = (value) => (Number(value) * Math.PI) / 180;
+
+const calculateDistanceKm = (from, to) => {
+  const fromLat = Number(from?.lat);
+  const fromLng = Number(from?.lng);
+  const toLat = Number(to?.lat);
+  const toLng = Number(to?.lng);
+
+  if (![fromLat, fromLng, toLat, toLng].every(Number.isFinite)) {
+    return null;
+  }
+
+  const earthRadiusKm = 6371;
+  const dLat = toRadians(toLat - fromLat);
+  const dLng = toRadians(toLng - fromLng);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRadians(fromLat)) * Math.cos(toRadians(toLat)) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return earthRadiusKm * c;
+};
 
 const DestinationsPage = () => {
   const { user } = useContext(AuthContext);
@@ -15,7 +40,11 @@ const DestinationsPage = () => {
   const [newDestinationName, setNewDestinationName] = useState('');
   const [selectedDestination, setSelectedDestination] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [liveLocation, setLiveLocation] = useState(null);
+  const [liveLocationStatus, setLiveLocationStatus] = useState({ type: '', message: '' });
   const router = useRouter();
+
+  const distanceToSelectedDestinationKm = calculateDistanceKm(liveLocation, selectedDestination);
 
   useEffect(() => {
     if (isAdmin) {
@@ -28,6 +57,73 @@ const DestinationsPage = () => {
       fetchDestinations();
     }
   }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || isAdmin || typeof window === 'undefined') {
+      return;
+    }
+
+    const stored = localStorage.getItem(getLiveLocationStorageKey(user.id));
+    if (!stored) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(stored);
+      if (Number.isFinite(Number(parsed?.lat)) && Number.isFinite(Number(parsed?.lng))) {
+        setLiveLocation({
+          lat: Number(parsed.lat),
+          lng: Number(parsed.lng),
+        });
+      }
+    } catch {
+      // Ignore malformed localStorage payload.
+    }
+  }, [user?.id, isAdmin]);
+
+  const requestLiveLocation = () => {
+    if (typeof window === 'undefined' || !window.navigator?.geolocation) {
+      setLiveLocationStatus({
+        type: 'error',
+        message: 'Geolocation is not supported in this browser.',
+      });
+      return;
+    }
+
+    setLiveLocationStatus({ type: 'loading', message: 'Fetching your current location...' });
+
+    window.navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const coords = {
+          lat: Number(position.coords.latitude),
+          lng: Number(position.coords.longitude),
+        };
+
+        setLiveLocation(coords);
+        localStorage.setItem(
+          getLiveLocationStorageKey(user?.id),
+          JSON.stringify({
+            ...coords,
+            accuracy: Number(position.coords.accuracy || 0),
+            captured_at: new Date().toISOString(),
+          })
+        );
+        setLiveLocationStatus({ type: 'success', message: 'Live location captured.' });
+      },
+      (error) => {
+        const message =
+          error?.code === 1
+            ? 'Location permission denied. Please allow location access.'
+            : 'Unable to get your live location right now.';
+        setLiveLocationStatus({ type: 'error', message });
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 300000,
+      }
+    );
+  };
 
   const fetchDestinations = async () => {
     try {
@@ -144,14 +240,45 @@ const DestinationsPage = () => {
           <div className="mb-8 rounded-2xl border border-white/20 bg-white/10 p-6 backdrop-blur-md">
             <h2 className="text-3xl font-bold mb-4">Choose Destination on Map</h2>
             <p className="mb-4 text-gray-300">Search your destination and continue to nearby hotels.</p>
+            <div className="mb-4 rounded-lg border border-white/20 bg-black/25 p-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-gray-200">
+                  {liveLocation
+                    ? 'Live location detected. Distance will be shown for your selected destination.'
+                    : 'Allow live location to see distance from your current location.'}
+                </p>
+                <button
+                  type="button"
+                  onClick={requestLiveLocation}
+                  className="rounded-md border border-primary/60 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/10"
+                >
+                  {liveLocation ? 'Refresh Live Location' : 'Enable Live Location'}
+                </button>
+              </div>
+              {liveLocationStatus.message && (
+                <p className={`mt-2 text-xs ${liveLocationStatus.type === 'error' ? 'text-red-300' : 'text-green-300'}`}>
+                  {liveLocationStatus.message}
+                </p>
+              )}
+            </div>
             <RouteMap 
               onPlaceSelect={setSelectedDestination} 
               selectedDestinationName={selectedDestination?.name || ''}
             />
             {selectedDestination?.name && (
-              <p className="mt-3 text-sm text-primary">
-                Selected: {selectedDestination.name}
-              </p>
+              <div className="mt-3 space-y-1">
+                <p className="text-sm text-primary">Selected: {selectedDestination.name}</p>
+                {liveLocation && Number.isFinite(distanceToSelectedDestinationKm) && (
+                  <p className="text-sm text-emerald-300">
+                    Distance from your live location: {distanceToSelectedDestinationKm.toFixed(1)} km
+                  </p>
+                )}
+                {liveLocation && !Number.isFinite(distanceToSelectedDestinationKm) && (
+                  <p className="text-sm text-yellow-300">
+                    Distance unavailable for this destination.
+                  </p>
+                )}
+              </div>
             )}
             <button
               type="button"
