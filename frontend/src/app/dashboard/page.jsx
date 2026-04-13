@@ -101,6 +101,19 @@ const Dashboard = () => {
     return Math.trunc(numericPrice);
   };
 
+  const hotelMetaById = hotels.reduce((acc, hotel) => {
+    const normalizedHotelId = String(hotel?.hotel_id || hotel?.place_id || '').trim();
+    if (!normalizedHotelId) {
+      return acc;
+    }
+
+    acc[normalizedHotelId] = {
+      hotel_name: String(hotel?.hotel_name || '').trim(),
+      address: String(hotel?.address || '').trim(),
+    };
+    return acc;
+  }, {});
+
   const setReviewFormField = (hotelId, field, value) => {
     setReviewForms((prev) => ({
       ...prev,
@@ -307,9 +320,21 @@ const Dashboard = () => {
                 {bookings.map((booking) => (
                   <div key={booking.booking_id} className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
                     <h3 className="text-lg font-bold text-white">
-                      {booking.hotel_name || booking.hotel?.hotel_name || 'Hotel'}
+                      {(() => {
+                        const normalizedHotelId = String(booking?.hotel_id || '').trim();
+                        const bookingHotelName = String(booking?.hotel_name || booking.hotel?.hotel_name || '').trim();
+                        const mappedHotelName = String(hotelMetaById?.[normalizedHotelId]?.hotel_name || '').trim();
+
+                        if (bookingHotelName && bookingHotelName !== normalizedHotelId) {
+                          return bookingHotelName;
+                        }
+
+                        return mappedHotelName || 'Hotel';
+                      })()}
                     </h3>
-                    <p className="text-sm text-gray-300 mt-1">{booking.address}</p>
+                    <p className="text-sm text-gray-300 mt-1">
+                      {booking.address || hotelMetaById?.[String(booking?.hotel_id || '').trim()]?.address || ''}
+                    </p>
                     
                     <div className="mt-4 space-y-2 text-sm text-gray-300">
                       <div className="flex justify-between">
