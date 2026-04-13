@@ -108,6 +108,14 @@ export const AuthProvider = ({ children }) => {
 
     sessionStorage.setItem(promptSessionKey, '1');
 
+    const shouldRequestLiveLocation = window.confirm(
+      'Allow live location access to show distance from your current location to searched destinations?'
+    );
+
+    if (!shouldRequestLiveLocation) {
+      return;
+    }
+
     window.navigator.geolocation.getCurrentPosition(
       (position) => {
         const payload = {
