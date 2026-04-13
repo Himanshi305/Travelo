@@ -213,10 +213,15 @@ export const getBookings = async (req, res) => {
     const enrichedBookings = bookings.map((booking) => {
       const normalizedHotelId = String(booking?.hotel_id || '').trim();
       const hotelMeta = hotelById[normalizedHotelId] || {};
+      const bookingHotelName = String(booking?.hotel_name || '').trim();
+      const safeHotelName =
+        bookingHotelName && bookingHotelName !== normalizedHotelId
+          ? bookingHotelName
+          : String(hotelMeta.hotel_name || '').trim();
 
       return {
         ...booking,
-        hotel_name: booking?.hotel_name || hotelMeta.hotel_name || '',
+        hotel_name: safeHotelName,
         address: booking?.address || hotelMeta.address || '',
       };
     });
