@@ -35,58 +35,9 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  useEffect(() => {
-    const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const currentUser = session?.user ?? null;
-
-      if (currentUser) {
-        const previousAuthUserId = localStorage.getItem('auth_user_id');
-        if (previousAuthUserId && previousAuthUserId !== currentUser.id) {
-          clearClientUserData();
-        }
-        localStorage.setItem('auth_user_id', currentUser.id);
-      } else {
-        localStorage.removeItem('auth_user_id');
-      }
-
-      setUser(currentUser);
-      setLoading(false);
-    };
-
-    getSession();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        const nextUser = session?.user ?? null;
-
-        if (event === 'SIGNED_IN' && nextUser) {
-          const previousAuthUserId = localStorage.getItem('auth_user_id');
-          if (previousAuthUserId && previousAuthUserId !== nextUser.id) {
-            clearClientUserData();
-          }
-          localStorage.setItem('auth_user_id', nextUser.id);
-        }
-
-        setUser(nextUser);
-
-        // Redirect on sign-out
-        if (event === 'SIGNED_OUT') {
-          localStorage.removeItem('auth_user_id');
-          clearClientUserData();
-          router.push('/login');
-        }
-      }
-    );
-
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
-  }, [router]);
-
-  useEffect(() => {
-    const userId = user?.id;
-    const role = String(user?.user_metadata?.role || '').toLowerCase();
+  const promptLiveLocationAfterLogin = (nextUser) => {
+    const userId = nextUser?.id;
+    const role = String(nextUser?.user_metadata?.role || '').toLowerCase();
 
     if (!userId || role !== 'user') {
       return;
@@ -136,7 +87,56 @@ export const AuthProvider = ({ children }) => {
         maximumAge: 300000,
       }
     );
-  }, [user?.id, user?.user_metadata?.role]);
+  };
+
+  useEffect(() => {
+    const getSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentUser = session?.user ?? null;
+
+      if (currentUser) {
+        const previousAuthUserId = localStorage.getItem('auth_user_id');
+        if (previousAuthUserId && previousAuthUserId !== currentUser.id) {
+          clearClientUserData();
+        }
+        localStorage.setItem('auth_user_id', currentUser.id);
+      } else {
+        localStorage.removeItem('auth_user_id');
+      }
+
+      setUser(currentUser);
+      setLoading(false);
+    };
+
+    getSession();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        const nextUser = session?.user ?? null;
+
+        if (event === 'SIGNED_IN' && nextUser) {
+          const previousAuthUserId = localStorage.getItem('auth_user_id');
+          if (previousAuthUserId && previousAuthUserId !== nextUser.id) {
+            clearClientUserData();
+          }
+          localStorage.setItem('auth_user_id', nextUser.id);
+        }
+
+        setUser(nextUser);
+
+        // Redirect on sign-out
+        if (event === 'SIGNED_OUT') {
+          localStorage.removeItem('auth_user_id');
+          clearClientUserData();
+          router.push('/login');
+        }
+      }
+    );
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, [router]);
 
   const login = async (email, password) => {
     try {
@@ -153,6 +153,8 @@ export const AuthProvider = ({ children }) => {
       // Save token for backend requests
       const token = data.session.access_token;
       localStorage.setItem('token', token);
+
+      promptLiveLocationAfterLogin(data?.user);
 
       return { success: true };
     } catch (err) {
