@@ -306,7 +306,9 @@ const Dashboard = () => {
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {bookings.map((booking) => (
                   <div key={booking.booking_id} className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
-                    <h3 className="text-lg font-bold text-white">{booking.hotel_name}</h3>
+                    <h3 className="text-lg font-bold text-white">
+                      {booking.hotel_name || booking.hotel?.hotel_name || booking.hotel_id || 'Hotel'}
+                    </h3>
                     <p className="text-sm text-gray-300 mt-1">{booking.address}</p>
                     
                     <div className="mt-4 space-y-2 text-sm text-gray-300">

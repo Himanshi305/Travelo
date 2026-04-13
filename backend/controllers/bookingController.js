@@ -182,9 +182,48 @@ export const getBookings = async (req, res) => {
       });
     }
 
+    const bookings = Array.isArray(data) ? data : [];
+    const hotelIds = [...new Set(bookings.map((booking) => String(booking?.hotel_id || '').trim()).filter(Boolean))];
+
+    let hotelById = {};
+    if (hotelIds.length > 0) {
+      const { data: hotelsData, error: hotelsError } = await supabase
+        .from('Hotel_Master')
+        .select('hotel_id, hotel_name, address')
+        .in('hotel_id', hotelIds);
+
+      if (hotelsError) {
+        console.error('[getBookings] Failed to fetch hotel details for bookings:', hotelsError);
+      } else {
+        hotelById = (hotelsData || []).reduce((acc, hotel) => {
+          const normalizedHotelId = String(hotel?.hotel_id || '').trim();
+          if (!normalizedHotelId) {
+            return acc;
+          }
+
+          acc[normalizedHotelId] = {
+            hotel_name: hotel?.hotel_name || '',
+            address: hotel?.address || '',
+          };
+          return acc;
+        }, {});
+      }
+    }
+
+    const enrichedBookings = bookings.map((booking) => {
+      const normalizedHotelId = String(booking?.hotel_id || '').trim();
+      const hotelMeta = hotelById[normalizedHotelId] || {};
+
+      return {
+        ...booking,
+        hotel_name: booking?.hotel_name || hotelMeta.hotel_name || '',
+        address: booking?.address || hotelMeta.address || '',
+      };
+    });
+
     return res.status(200).json({
       success: true,
-      bookings: data || [],
+      bookings: enrichedBookings,
     });
   } catch (err) {
     console.error('[getBookings] Unexpected error:', err);
